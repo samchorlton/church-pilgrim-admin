@@ -623,6 +623,7 @@
       const allTags = Array.from(new Set([...selectedTags, ...customTags].map((tag) => String(tag).trim()).filter(Boolean)));
       const selectedStatus = getFieldValue("p-editorial-status");
       const customStatus = getFieldValue("p-editorial-status-custom");
+      const active = getFieldValue("p-active-status") || null;
       const selectedGrade = getFieldValue("p-supp-grade");
       const customGrade = getFieldValue("p-supp-grade-custom");
       const heroImageUrl = getFieldValue("p-hero-image-url");
@@ -668,6 +669,7 @@
         editorial_status: customStatus || selectedStatus || selectedProfile?.editorial_status || "draft",
         editorial_notes: convertNewlinesToBr(getFieldValue("p-editorial-notes")),
         church_website: getFieldValue("p-church-website"),
+        current_usage: active !== null ? active : selectedProfile?.current_usage,
         hero_date_label: heroDateLabel, // Backend maps to construction_date
         plan_url: planUrl || null,
         tags: allTags,
@@ -706,6 +708,7 @@
       const rowStatus = String(row?.editorial_status ?? "draft").trim();
       setValue("p-editorial-status", KNOWN_EDITORIAL_STATUSES.includes(rowStatus) ? rowStatus : "");
       setValue("p-editorial-status-custom", KNOWN_EDITORIAL_STATUSES.includes(rowStatus) ? "" : rowStatus);
+      setValue("p-active-status", row?.current_usage || "");
       setValue("p-editorial-notes", decodeEscapedNewlines(row?.editorial_notes));
       setValue("p-church-website", row?.church_website);
       setValue("p-hero-image-url", heroImageUrl);
@@ -1410,8 +1413,13 @@
     document.getElementById("cod-delete-btn").onclick = deleteEntry;
   }
 
+  // Hide page content until auth is verified
+  const main = document.querySelector("main");
+  if (main) main.style.display = "none";
+
   fetchJson("/api/auth/me")
     .then(() => {
+      if (main) main.style.display = "";
       ensureAuthHeaderActions();
       initProfilesPage().catch(() => {});
       initHistoryFactsPage().catch(() => {});

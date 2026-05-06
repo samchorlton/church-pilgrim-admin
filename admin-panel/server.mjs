@@ -933,6 +933,7 @@ function buildChurchProfilePayload(input, forCreate) {
     title: title ?? undefined,
     subtitle: cleanString(input.subtitle),
     summary: cleanString(input.summary),
+    current_usage: cleanString(input.current_usage),
     editorial_status: validateEditorialStatus(input.editorial_status), // Validate enum values
     editorial_notes: cleanString(input.editorial_notes),
     church_website: cleanString(input.church_website),
@@ -1361,6 +1362,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/church-profiles" && method === "GET") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const limit = Math.max(1, Math.min(100, Number(requestUrl.searchParams.get("limit") || 25)));
     const offset = Math.max(0, Number(requestUrl.searchParams.get("offset") || 0));
     const query = cleanString(requestUrl.searchParams.get("query"));
@@ -1453,6 +1458,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/church-profiles" && method === "POST") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     try {
       const parsed = await parseJsonBody(req);
       const payload = buildChurchProfilePayload(parsed, true);
@@ -1472,6 +1481,10 @@ export async function handleRequest(req, res) {
 
   if (pathname.startsWith("/api/content/church-profiles/")) {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const segments = pathname.split("/").filter(Boolean);
     const validPrefix =
       segments.length >= 4 &&
@@ -1687,7 +1700,7 @@ export async function handleRequest(req, res) {
     if (method === "GET") {
       try {
         const rows = await supabaseRequest(
-          `churches_v2?list_entry=eq.${listEntry}&select=id,list_entry,title,subtitle,summary,editorial_status,editorial_notes,tags,church_website,construction_date,timeline_events,hero_image_url,plan_url,source_url,parish,district,county,lat,lng,history_detail,architecture_detail,additional_info,date_first_listed,grade,heritage_category,completeness_score,created_at,updated_at&limit=1`
+          `churches_v2?list_entry=eq.${listEntry}&select=id,list_entry,title,subtitle,summary,current_usage,editorial_status,editorial_notes,tags,church_website,construction_date,timeline_events,hero_image_url,plan_url,source_url,parish,district,county,lat,lng,history_detail,architecture_detail,additional_info,date_first_listed,grade,heritage_category,completeness_score,created_at,updated_at&limit=1`
         );
         sendJson(res, 200, { row: rows?.[0] ?? null });
       } catch (error) {
@@ -1761,6 +1774,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/history-facts" && method === "GET") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const limit = Math.max(1, Math.min(200, Number(requestUrl.searchParams.get("limit") || 50)));
     const offset = Math.max(0, Number(requestUrl.searchParams.get("offset") || 0));
     try {
@@ -1790,6 +1807,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/history-facts" && method === "POST") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     try {
       const parsed = await parseJsonBody(req);
       const payload = buildHistoryFactPayload(parsed, true);
@@ -1807,6 +1828,10 @@ export async function handleRequest(req, res) {
 
   if (pathname.startsWith("/api/content/history-facts/")) {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const factId = Number(pathname.replace("/api/content/history-facts/", ""));
     if (!Number.isInteger(factId) || factId <= 0) {
       sendJson(res, 400, { error: "Invalid fact id." });
@@ -1859,6 +1884,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/church-of-day" && method === "GET") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const limit = Math.max(1, Math.min(365, Number(requestUrl.searchParams.get("limit") || 60)));
     const offset = Math.max(0, Number(requestUrl.searchParams.get("offset") || 0));
     const featureDateFilter = cleanString(requestUrl.searchParams.get("feature_date"));
@@ -1883,6 +1912,10 @@ export async function handleRequest(req, res) {
 
   if (pathname === "/api/content/church-of-day" && method === "POST") {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     try {
       const parsed = await parseJsonBody(req);
       const payload = buildChurchOfDayPayload(parsed, true);
@@ -1900,6 +1933,10 @@ export async function handleRequest(req, res) {
 
   if (pathname.startsWith("/api/content/church-of-day/")) {
     if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
     const featureDate = pathname.replace("/api/content/church-of-day/", "");
     try {
       parseFeatureDate(featureDate);

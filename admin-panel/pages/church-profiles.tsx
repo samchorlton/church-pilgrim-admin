@@ -65,6 +65,19 @@ export default function ChurchProfilesPage() {
                     <option value="live">live</option>
                     <option value="archived">archived</option>
                   </select>
+                  <select id="p-active-status">
+                    <option value="">Select church status</option>
+                    <option value="Active Church">Active Church</option>
+                    <option value="Occasional Worship">Occasional Worship</option>
+                    <option value="Private Ownership">Private Ownership</option>
+                    <option value="Converted Use">Converted Use</option>
+                    <option value="Ruined">Ruined</option>
+                    <option value="Derelict">Derelict</option>
+                    <option value="Preserved Historic Site">Preserved Historic Site</option>
+                    <option value="Closed Church">Closed Church</option>
+                    <option value="Demolished">Demolished</option>
+                    <option value="Current Use Unknown">Current Use Unknown</option>
+                  </select>
                   <input id="p-church-website" className="span-2" placeholder="Church website URL" />
                   <h3 className="subsection-title span-2">Hero Image (App)</h3>
                   <input id="p-hero-image-url" className="span-2" placeholder="Hero image URL (used in app)" />
