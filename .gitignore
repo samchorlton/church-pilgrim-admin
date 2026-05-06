@@ -1,0 +1,51 @@
+# Node.js dependencies
+node_modules/
+admin-panel/node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Local environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+
+# Generated files
+coverage/
+
+# Script-generated JSON files
+scripts/*.json
+scripts/**/*.json
+
+# Optional lock files
+package-lock.json
+pnpm-lock.yaml
+
+yarn.lock

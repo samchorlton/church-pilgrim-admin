@@ -1,0 +1,27 @@
+{
+  "name": "church-pilgrim-admin",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Admin panel and data tooling for Church Pilgrim",
+  "scripts": {
+    "admin:dev": "npm --prefix ./admin-panel run dev",
+    "admin:build": "npm --prefix ./admin-panel run build",
+    "admin:start": "npm --prefix ./admin-panel run start",
+    "admin:legacy:start": "node ./admin-panel/server.mjs",
+    "build:church-db": "node ./scripts/build-church-db.mjs",
+    "build:church-profiles": "node ./scripts/build-church-profiles.mjs",
+    "build:church-profiles:batch": "node ./scripts/run-build-church-profiles-batch.mjs",
+    "build:church-profiles:remaining": "node ./scripts/run-build-remaining-church-profiles.mjs",
+    "build:church-profiles:remaining:python": "node ./scripts/run-build-remaining-church-profiles.mjs --python-scraper",
+    "backfill:hero-images": "node ./scripts/backfill-hero-images-from-app-resolver.mjs",
+    "sync:profiles:supabase": "node ./scripts/sync-profiles-to-supabase.mjs",
+    "sync:listings:supabase": "node ./scripts/import-church-listing-points-to-supabase.mjs",
+    "sync:cadw:seed:supabase": "node ./scripts/import-cadw-churches-to-supabase.mjs",
+    "enrich:cadw:phase2": "node ./scripts/run-cadw-phase2-enrichment.mjs",
+    "enrich:church:records": "node --experimental-strip-types ./scripts/enrich-church-records.ts",
+    "sync:enrichment:supabase": "node ./scripts/sync-enrichment-to-supabase.mjs",
+    "enrich:listings": "node ./scripts/enrich-listings.mjs",
+    "enrich:listings:retry": "node ./scripts/enrich-listings.mjs --retry-errors",
+    "expo:env:push": "node ./scripts/push-eas-env.mjs"
+  }
+}

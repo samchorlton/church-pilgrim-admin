@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel Login</title>
+    <link rel="stylesheet" href="/common.css" />
+  </head>
+  <body>
+    <main class="login-wrap">
+      <section class="login-card">
+        <h1 class="login-title">Admin Sign In</h1>
+        <p class="note login-note">Sign in with your Supabase account. Access is granted only to users in <code>admin_users</code>.</p>
+        <form id="login-form" class="login-form">
+          <input id="login-email" type="email" placeholder="Email" autocomplete="username" required />
+          <input id="login-password" type="password" placeholder="Password" autocomplete="current-password" required />
+          <div class="row login-actions">
+            <button type="submit">Sign In</button>
+            <span id="login-message" class="mini"></span>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script>
+      (function () {
+        const form = document.getElementById("login-form");
+        const msg = document.getElementById("login-message");
+        const setMessage = (text, isError) => {
+          msg.textContent = text || "";
+          msg.className = isError ? "error" : "mini";
+        };
+
+        fetch("/api/auth/me", { credentials: "include" })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((payload) => {
+            if (payload?.ok) window.location.href = "/";
+          })
+          .catch(() => {});
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          setMessage("Signing in...");
+          const email = document.getElementById("login-email").value.trim();
+          const password = document.getElementById("login-password").value;
+          try {
+            const response = await fetch("/api/auth/login", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              setMessage(payload.error || "Sign in failed.", true);
+              return;
+            }
+            window.location.href = "/";
+          } catch {
+            setMessage("Could not reach admin server.", true);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

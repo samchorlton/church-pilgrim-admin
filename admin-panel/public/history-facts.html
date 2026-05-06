@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel - History Facts</title>
+    <link rel="stylesheet" href="/common.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>History Facts</h1>
+        <p class="note">Manage daily historical facts served in the app.</p>
+      </header>
+
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/church-profiles.html">Church Profiles</a>
+        <a class="nav-link active" href="/history-facts.html">History Facts</a>
+        <a class="nav-link" href="/church-of-day.html">Church of the Day</a>
+      </nav>
+
+      <section class="panel">
+        <div class="row">
+          <button id="fact-refresh-btn">Refresh Facts</button>
+          <button id="fact-new-btn" class="ghost">New Fact</button>
+          <input id="fact-filter-date" type="date" />
+          <button id="fact-filter-btn" class="ghost">Filter Day</button>
+          <button id="fact-clear-filter-btn" class="ghost">Clear Filter</button>
+          <span id="fact-status" class="mini"></span>
+        </div>
+        <div class="split">
+          <div><div id="fact-list" class="list"></div></div>
+          <div>
+            <div class="form-grid">
+              <input id="f-id" placeholder="ID" disabled />
+              <input id="f-year" placeholder="Year (optional)" />
+              <input id="f-month" placeholder="Month (1-12)" />
+              <input id="f-day" placeholder="Day (1-31)" />
+              <input id="f-short-description" class="span-2" placeholder="Short description" />
+              <textarea id="f-long-description" class="span-2" placeholder="Long description"></textarea>
+            </div>
+            <div class="row">
+              <button id="fact-save-btn">Save Fact</button>
+              <button id="fact-delete-btn" class="danger">Delete Fact</button>
+              <span id="fact-message" class="mini"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/common.js"></script>
+  </body>
+</html>

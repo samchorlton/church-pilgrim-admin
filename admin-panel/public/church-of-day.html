@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel - Church of the Day</title>
+    <link rel="stylesheet" href="/common.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>Church of the Day</h1>
+        <p class="note">Manage the daily featured church shown consistently to all users.</p>
+      </header>
+
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/church-profiles.html">Church Profiles</a>
+        <a class="nav-link" href="/history-facts.html">History Facts</a>
+        <a class="nav-link active" href="/church-of-day.html">Church of the Day</a>
+      </nav>
+
+      <section class="panel">
+        <div class="row">
+          <input id="cod-filter-date" type="date" />
+          <button id="cod-filter-btn" class="ghost">Filter Date</button>
+          <button id="cod-clear-filter-btn" class="ghost">Clear Filter</button>
+          <button id="cod-refresh-btn">Refresh Entries</button>
+          <button id="cod-new-btn" class="ghost">New Entry</button>
+          <span id="cod-status" class="mini"></span>
+        </div>
+        <div class="split">
+          <div><div id="cod-list" class="list"></div></div>
+          <div>
+            <div class="form-grid">
+              <input id="cod-feature-date" placeholder="Feature date (YYYY-MM-DD)" />
+              <input id="cod-list-entry" placeholder="List entry" />
+              <textarea id="cod-rich-summary" class="span-2" placeholder="Rich summary override (optional). If blank, app uses profile summary fallback."></textarea>
+            </div>
+            <div class="row">
+              <button id="cod-save-btn">Save Entry</button>
+              <button id="cod-delete-btn" class="danger">Delete Entry</button>
+              <span id="cod-message" class="mini"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/common.js"></script>
+  </body>
+</html>
