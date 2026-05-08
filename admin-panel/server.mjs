@@ -833,6 +833,13 @@ function parseModerationStatus(value) {
   throw new Error("Status must be pending, approved, or rejected.");
 }
 
+function parseMemoryType(value) {
+  const type = String(value ?? "").trim().toLowerCase();
+  if (!type) return null;
+  if (type === "memory" || type === "tradition" || type === "person" || type === "people") return type;
+  throw new Error("memory_type must be memory, tradition, or people.");
+}
+
 function validateEditorialStatus(value) {
   const validStatuses = ['draft', 'review', 'live', 'archived'];
   const cleaned = cleanString(value);
@@ -1241,6 +1248,7 @@ export async function handleRequest(req, res) {
     if (!requireSupabaseConfig(res)) return;
     try {
       const status = parseModerationStatus(requestUrl.searchParams.get("status")) ?? "pending";
+      const memoryType = parseMemoryType(requestUrl.searchParams.get("memory_type"));
       const view = String(requestUrl.searchParams.get("view") || "approvals").trim().toLowerCase();
       const listEntryRaw = cleanString(requestUrl.searchParams.get("list_entry"));
       const listEntry = listEntryRaw ? Number(listEntryRaw) : null;
@@ -1251,7 +1259,7 @@ export async function handleRequest(req, res) {
       const shouldLoadText = view !== "uploads";
       const shouldLoadMedia = true;
 
-      const [textRows, folkloreRows, imageRows, audioRows] = await Promise.all([
+      const [textRows, folkloreRows, imageRows, audioRows, memoryRows, peopleRows] = await Promise.all([
         shouldLoadText
           ? supabaseRequest(
               `church_contributions?select=id,user_id,list_entry,contribution_type,current_content,suggested_content,timeline_year,status,admin_notes,created_at,updated_at&status=eq.${status}${suffix}&order=created_at.desc&limit=300`
@@ -1270,6 +1278,16 @@ export async function handleRequest(req, res) {
         shouldLoadMedia
           ? supabaseRequest(
               `church_audio_contributions?select=id,user_id,list_entry,audio_url,audio_title,audio_credit,file_name,mime_type,file_size_bytes,status,admin_notes,created_at,updated_at&status=eq.${status}${suffix}&order=created_at.desc&limit=300`
+            )
+          : Promise.resolve([]),
+        shouldLoadText
+          ? supabaseRequest(
+              `church_memories?select=id,user_id,list_entry,memory_type,title,body_text,image_url,event_date,from_date,to_date,status,admin_notes,created_at,updated_at&status=eq.${status}${memoryType === "memory" || memoryType === "tradition" ? `&memory_type=eq.${memoryType}` : memoryType === "person" || memoryType === "people" ? "&id=eq.-1" : ""}${suffix}&order=created_at.desc&limit=300`
+            )
+          : Promise.resolve([]),
+        shouldLoadText
+          ? supabaseRequest(
+              `church_people?select=id,user_id,list_entry,title,role,body_text,image_url,from_date,to_date,status,admin_notes,created_at,updated_at&status=eq.${status}${memoryType === "person" || memoryType === "people" ? "" : memoryType ? "&id=eq.-1" : ""}${suffix}&order=created_at.desc&limit=300`
             )
           : Promise.resolve([]),
       ]);
@@ -1293,6 +1311,20 @@ export async function handleRequest(req, res) {
             moderation_type: "folklore",
           }))
         : [];
+      const normalizedMemoryRows = Array.isArray(memoryRows)
+        ? memoryRows.map((row) => ({
+            ...row,
+            moderation_type: "memory",
+          }))
+        : [];
+      const normalizedPeopleRows = Array.isArray(peopleRows)
+        ? peopleRows.map((row) => ({
+            ...row,
+            memory_type: "person",
+            event_date: null,
+            moderation_type: "people",
+          }))
+        : [];
 
       sendJson(res, 200, {
         text: [...normalizedTextRows, ...normalizedFolkloreRows].sort(
@@ -1300,10 +1332,99 @@ export async function handleRequest(req, res) {
         ),
         images: Array.isArray(imageRows) ? imageRows : [],
         audio: Array.isArray(audioRows) ? audioRows : [],
+        memories: [...normalizedMemoryRows, ...normalizedPeopleRows].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ),
         status,
+        memory_type: memoryType,
         view,
         list_entry: listEntryValid,
       });
+    } catch (error) {
+      sendJson(res, 400, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname === "/api/moderation/outstanding" && method === "GET") {
+    if (!requireSupabaseConfig(res)) return;
+    try {
+      const outstandingStatuses = ["pending", "submitted", "in_review", "new"];
+      const outstandingStatusExpr = `status=in.(${outstandingStatuses.map((status) => encodeURIComponent(status)).join(",")})`;
+
+      const [textRows, folkloreRows, imageRows, audioRows, memoryRows, peopleRows] = await Promise.all([
+        supabaseRequest(`church_contributions?select=list_entry,created_at&${outstandingStatusExpr}&limit=5000`),
+        supabaseRequest(`church_folklore_contributions?select=list_entry,created_at&status=eq.pending&limit=5000`),
+        supabaseRequest(`church_image_contributions?select=list_entry,created_at&${outstandingStatusExpr}&limit=5000`),
+        supabaseRequest(`church_audio_contributions?select=list_entry,created_at&${outstandingStatusExpr}&limit=5000`),
+        supabaseRequest(`church_memories?select=list_entry,created_at&status=eq.pending&limit=5000`),
+        supabaseRequest(`church_people?select=list_entry,created_at&status=eq.pending&limit=5000`),
+      ]);
+
+      const byListEntry = new Map();
+      function getBucket(listEntry) {
+        const key = Number(listEntry);
+        if (!Number.isInteger(key) || key <= 0) return null;
+        if (!byListEntry.has(key)) {
+          byListEntry.set(key, {
+            list_entry: key,
+            counts: { text: 0, folklore: 0, image: 0, audio: 0, memory: 0, people: 0 },
+            total: 0,
+            latest_created_at: null,
+          });
+        }
+        return byListEntry.get(key);
+      }
+
+      function addRows(rows, type) {
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const bucket = getBucket(row?.list_entry);
+          if (!bucket) continue;
+          bucket.counts[type] += 1;
+          bucket.total += 1;
+          const createdAt = cleanString(row?.created_at);
+          if (createdAt && (!bucket.latest_created_at || new Date(createdAt) > new Date(bucket.latest_created_at))) {
+            bucket.latest_created_at = createdAt;
+          }
+        }
+      }
+
+      addRows(textRows, "text");
+      addRows(folkloreRows, "folklore");
+      addRows(imageRows, "image");
+      addRows(audioRows, "audio");
+      addRows(memoryRows, "memory");
+      addRows(peopleRows, "people");
+
+      const entries = Array.from(byListEntry.values());
+      const listEntries = entries.map((entry) => entry.list_entry);
+      const profileByListEntry = new Map();
+      if (listEntries.length) {
+        const profiles = await supabaseRequest(
+          `churches_v2?select=list_entry,title,subtitle&list_entry=in.(${listEntries.join(",")})&limit=${Math.max(listEntries.length, 1)}`
+        );
+        for (const row of Array.isArray(profiles) ? profiles : []) {
+          const key = Number(row?.list_entry);
+          if (!Number.isInteger(key) || key <= 0) continue;
+          profileByListEntry.set(key, row);
+        }
+      }
+
+      const rows = entries
+        .map((entry) => {
+          const profile = profileByListEntry.get(entry.list_entry);
+          return {
+            ...entry,
+            title: cleanString(profile?.title) ?? `List ${entry.list_entry}`,
+            subtitle: cleanString(profile?.subtitle) ?? null,
+          };
+        })
+        .sort((a, b) => {
+          if (b.total !== a.total) return b.total - a.total;
+          return new Date(b.latest_created_at || 0).getTime() - new Date(a.latest_created_at || 0).getTime();
+        });
+
+      sendJson(res, 200, { rows });
     } catch (error) {
       sendJson(res, 400, { error: String(error.message || error) });
     }
@@ -1329,10 +1450,12 @@ export async function handleRequest(req, res) {
       folklore: "church_folklore_contributions",
       image: "church_image_contributions",
       audio: "church_audio_contributions",
+      memory: "church_memories",
+      people: "church_people",
     };
     const tableName = tableByType[targetType];
     if (!tableName) {
-      sendJson(res, 400, { error: "Unknown moderation type. Use text, folklore, image, or audio." });
+      sendJson(res, 400, { error: "Unknown moderation type. Use text, folklore, image, audio, memory, or people." });
       return;
     }
 
@@ -1396,11 +1519,13 @@ export async function handleRequest(req, res) {
         const outstandingStatuses = ["pending", "submitted", "in_review", "new"];
         const outstandingStatusExpr = `status=in.(${outstandingStatuses.map((status) => encodeURIComponent(status)).join(",")})`;
         const folkloreOutstandingStatusExpr = "status=eq.pending";
-        const [pendingTextRows, pendingFolkloreRows, pendingImageRows, pendingAudioRows] = await Promise.all([
+        const [pendingTextRows, pendingFolkloreRows, pendingImageRows, pendingAudioRows, pendingMemoryRows, pendingPeopleRows] = await Promise.all([
           supabaseRequest(`church_contributions?select=list_entry&${outstandingStatusExpr}&limit=5000`),
           supabaseRequest(`church_folklore_contributions?select=list_entry&${folkloreOutstandingStatusExpr}&limit=5000`),
           supabaseRequest(`church_image_contributions?select=list_entry&${outstandingStatusExpr}&limit=5000`),
           supabaseRequest(`church_audio_contributions?select=list_entry&${outstandingStatusExpr}&limit=5000`),
+          supabaseRequest(`church_memories?select=list_entry&status=eq.pending&limit=5000`),
+          supabaseRequest(`church_people?select=list_entry&status=eq.pending&limit=5000`),
         ]);
         outstandingModerationEntries = new Set(
           [
@@ -1408,6 +1533,8 @@ export async function handleRequest(req, res) {
             ...(pendingFolkloreRows || []),
             ...(pendingImageRows || []),
             ...(pendingAudioRows || []),
+            ...(pendingMemoryRows || []),
+            ...(pendingPeopleRows || []),
           ]
             .map((row) => Number(row?.list_entry))
             .filter((value) => Number.isInteger(value) && value > 0)

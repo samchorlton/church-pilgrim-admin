@@ -18,6 +18,7 @@ export default function ChurchProfilesPage() {
         <nav className="top-nav">
           <a className="nav-link" href="/">Home</a>
           <a className="nav-link active" href="/church-profiles">Church Profiles</a>
+          <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
         </nav>
@@ -167,6 +168,12 @@ export default function ChurchProfilesPage() {
                       <option value="rejected">rejected</option>
                       <option value="">all statuses</option>
                     </select>
+                    <select id="profile-mod-memory-type-filter">
+                      <option value="">all memories/people</option>
+                      <option value="memory">memory</option>
+                      <option value="tradition">tradition</option>
+                      <option value="people">people</option>
+                    </select>
                     <button id="profile-mod-refresh-btn" type="button">Refresh</button>
                     <span id="profile-mod-status" className="mini"></span>
                   </div>
@@ -177,6 +184,8 @@ export default function ChurchProfilesPage() {
                   <div id="profile-mod-image-list" className="queue-list"></div>
                   <h3 className="subsection-title">Audio Contributions</h3>
                   <div id="profile-mod-audio-list" className="queue-list"></div>
+                  <h3 className="subsection-title">Memories / Traditions / People</h3>
+                  <div id="profile-mod-memory-list" className="queue-list"></div>
 
                   <h3 className="subsection-title">Stories & Folklore (Admin Create)</h3>
                   <p className="note">Create folklore stories that will be auto-approved and appear in the Stories & Folklore tab.</p>

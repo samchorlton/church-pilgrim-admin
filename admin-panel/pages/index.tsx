@@ -17,6 +17,7 @@ export default function HomePage() {
         <nav className="top-nav">
           <a className="nav-link active" href="/">Home</a>
           <a className="nav-link" href="/church-profiles">Church Profiles</a>
+          <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
         </nav>
@@ -31,6 +32,10 @@ export default function HomePage() {
             <a className="tile" href="/history-facts">
               <h3>History Facts</h3>
               <p>Manage daily church history facts used by the app.</p>
+            </a>
+            <a className="tile" href="/moderation">
+              <h3>Moderation</h3>
+              <p>Review outstanding contributions and memories by church listing.</p>
             </a>
             <a className="tile" href="/church-of-day">
               <h3>Church of the Day</h3>

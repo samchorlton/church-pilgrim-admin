@@ -18,6 +18,7 @@ export default function ChurchOfDayPage() {
         <nav className="top-nav">
           <a className="nav-link" href="/">Home</a>
           <a className="nav-link" href="/church-profiles">Church Profiles</a>
+          <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link active" href="/church-of-day">Church of the Day</a>
         </nav>

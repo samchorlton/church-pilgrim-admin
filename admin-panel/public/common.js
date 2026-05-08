@@ -321,11 +321,13 @@
     const textListEl = document.getElementById(options.textListId);
     const imageListEl = document.getElementById(options.imageListId);
     const audioListEl = document.getElementById(options.audioListId);
-    if (!textListEl || !imageListEl || !audioListEl) return null;
+    const memoryListEl = document.getElementById(options.memoryListId);
+    if (!textListEl || !imageListEl || !audioListEl || !memoryListEl) return null;
 
     const statusEl = document.getElementById(options.statusId);
     const viewFilterEl = document.getElementById(options.viewFilterId);
     const statusFilterEl = document.getElementById(options.statusFilterId);
+    const memoryTypeFilterEl = document.getElementById(options.memoryTypeFilterId);
     const listEntryFilterEl = document.getElementById(options.listEntryFilterId);
     const refreshBtnEl = document.getElementById(options.refreshBtnId);
     let activeListEntryFilter = String(listEntryFilterEl?.value || "").trim();
@@ -352,6 +354,9 @@
         return;
       }
       items.forEach((item) => {
+        const moderationType = item.moderation_type || "memory";
+        const kindLabel =
+          moderationType === "people" ? "person" : String(item.memory_type || "memory").trim() || "memory";
         const moderationType = item.moderation_type || "text";
         const card = document.createElement("article");
         card.className = "moderation-item";
@@ -429,26 +434,66 @@
       });
     }
 
+    function renderMemoryItems(items) {
+      memoryListEl.innerHTML = "";
+      if (!items.length) {
+        renderEmpty(memoryListEl, "memory");
+        return;
+      }
+      items.forEach((item) => {
+        const dateLabel = item.event_date
+          ? `Event date: ${item.event_date}`
+          : item.from_date || item.to_date
+            ? `Date range: ${item.from_date || "?"} → ${item.to_date || "?"}`
+            : "Date: not provided";
+        const titleLabel = String(item.title || "").trim();
+        const roleLabel = String(item.role || "").trim();
+        const card = document.createElement("article");
+        card.className = "moderation-item";
+        card.innerHTML = `
+          <h3 class="moderation-title">#${item.id} | ${htmlEscape(kindLabel)} | List ${item.list_entry}</h3>
+          <p class="moderation-meta">Status: ${htmlEscape(item.status)} | User: ${htmlEscape(item.user_id)} | ${htmlEscape(item.created_at)}</p>
+          ${titleLabel ? `<div class="moderation-body"><strong>Title:</strong> ${htmlEscape(titleLabel)}</div>` : ""}
+          ${roleLabel ? `<div class="moderation-body"><strong>Role:</strong> ${htmlEscape(roleLabel)}</div>` : ""}
+          <div class="moderation-body"><strong>Body:</strong><br/>${htmlEscape(item.body_text || "").replace(/\n/g, "<br/>")}</div>
+          <div class="moderation-body"><strong>${htmlEscape(dateLabel)}</strong></div>
+          ${item.image_url ? `<img class="moderation-media" src="${htmlEscape(item.image_url)}" alt="Memory image" />` : ""}
+          ${item.image_url ? `<div class="moderation-body"><a href="${htmlEscape(item.image_url)}" target="_blank" rel="noreferrer">Open image</a></div>` : ""}
+          <div class="moderation-actions">
+            <textarea data-notes="${item.id}" class="span-2" placeholder="Admin notes">${htmlEscape(item.admin_notes || "")}</textarea>
+            <button data-action="approve" data-id="${item.id}" data-type="${moderationType}">Approve</button>
+            <button data-action="reject" data-id="${item.id}" data-type="${moderationType}" class="danger">Reject</button>
+            <button data-action="pending" data-id="${item.id}" data-type="${moderationType}" class="ghost">Mark Pending</button>
+          </div>
+        `;
+        memoryListEl.appendChild(card);
+      });
+    }
+
     async function loadQueue() {
       const view = String(viewFilterEl?.value || "approvals").trim();
       const status = String(statusFilterEl?.value || "pending").trim();
+      const memoryType = String(memoryTypeFilterEl?.value || "").trim();
       const listEntry = String(listEntryFilterEl?.value || activeListEntryFilter || "").trim();
       setMessage(statusEl, "Loading queue...");
       try {
         const qs = new URLSearchParams();
         if (view) qs.set("view", view);
         if (status) qs.set("status", status);
+        if (memoryType) qs.set("memory_type", memoryType);
         if (listEntry) qs.set("list_entry", listEntry);
         const data = await fetchJson(`/api/moderation/queue?${qs.toString()}`);
         const textItems = data.text || [];
         const imageItems = data.images || [];
         const audioItems = data.audio || [];
+        const memoryItems = data.memories || [];
         renderTextItems(textItems);
         renderImageItems(imageItems);
         renderAudioItems(audioItems);
+        renderMemoryItems(memoryItems);
         setMessage(
           statusEl,
-          `${textItems.length} text, ${imageItems.length} images, ${audioItems.length} audio`,
+          `${textItems.length} text, ${imageItems.length} images, ${audioItems.length} audio, ${memoryItems.length} memories`,
           "success"
         );
       } catch (error) {
@@ -480,10 +525,12 @@
     textListEl.addEventListener("click", handleActionClick);
     imageListEl.addEventListener("click", handleActionClick);
     audioListEl.addEventListener("click", handleActionClick);
+    memoryListEl.addEventListener("click", handleActionClick);
 
     refreshBtnEl && (refreshBtnEl.onclick = loadQueue);
     viewFilterEl?.addEventListener("change", loadQueue);
     statusFilterEl?.addEventListener("change", loadQueue);
+    memoryTypeFilterEl?.addEventListener("change", loadQueue);
     listEntryFilterEl?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") loadQueue();
     });
@@ -527,9 +574,11 @@
       textListId: "profile-mod-text-list",
       imageListId: "profile-mod-image-list",
       audioListId: "profile-mod-audio-list",
+      memoryListId: "profile-mod-memory-list",
       statusId: "profile-mod-status",
       viewFilterId: "profile-mod-view-filter",
       statusFilterId: "profile-mod-status-filter",
+      memoryTypeFilterId: "profile-mod-memory-type-filter",
       listEntryFilterId: "profile-mod-list-entry-filter",
       refreshBtnId: "profile-mod-refresh-btn",
     });
@@ -1413,6 +1462,78 @@
     document.getElementById("cod-delete-btn").onclick = deleteEntry;
   }
 
+  async function initModerationPage() {
+    const listEl = document.getElementById("moderation-list");
+    if (!listEl) return;
+
+    const statusEl = document.getElementById("moderation-status");
+    const refreshBtnEl = document.getElementById("moderation-refresh-btn");
+
+    const fmtCount = (value, label) => `${value} ${label}`;
+
+    const renderRows = (rows) => {
+      listEl.innerHTML = "";
+      if (!rows.length) {
+        listEl.innerHTML = "<div class='list-item mini'>No outstanding moderation tasks.</div>";
+        return;
+      }
+      rows.forEach((row) => {
+        const subtitle = String(row?.subtitle || "").trim();
+        const card = document.createElement("article");
+        card.className = "moderation-item";
+        card.innerHTML = `
+          <h3 class="moderation-title">${htmlEscape(row.title || `List ${row.list_entry}`)}</h3>
+          <p class="moderation-meta">List ${htmlEscape(row.list_entry)}${subtitle ? ` | ${htmlEscape(subtitle)}` : ""}</p>
+          <div class="moderation-body">
+            ${htmlEscape(
+              [
+                fmtCount(Number(row?.counts?.text || 0), "text"),
+                fmtCount(Number(row?.counts?.folklore || 0), "folklore"),
+                fmtCount(Number(row?.counts?.image || 0), "images"),
+                fmtCount(Number(row?.counts?.audio || 0), "audio"),
+                fmtCount(Number(row?.counts?.memory || 0), "memories"),
+                fmtCount(Number(row?.counts?.people || 0), "people"),
+              ].join(" | ")
+            )}
+          </div>
+          <div class="moderation-body"><strong>Total outstanding:</strong> ${htmlEscape(row.total || 0)}</div>
+          <div class="moderation-actions">
+            <button data-action="open-listing" data-list-entry="${row.list_entry}">Open Listing Moderation</button>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    };
+
+    const loadRows = async () => {
+      setMessage(statusEl, "Loading outstanding moderation tasks...");
+      try {
+        const data = await fetchJson("/api/moderation/outstanding");
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        renderRows(rows);
+        setMessage(statusEl, `${rows.length} listings with outstanding tasks`, "success");
+      } catch (error) {
+        setMessage(statusEl, error.message, "error");
+      }
+    };
+
+    listEl.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action='open-listing']");
+      if (!button) return;
+      const listEntry = Number(button.getAttribute("data-list-entry"));
+      if (!Number.isInteger(listEntry) || listEntry <= 0) return;
+      window.location.href = `/church-profiles?section=moderation&listingId=${listEntry}`;
+    });
+
+    if (refreshBtnEl) {
+      refreshBtnEl.onclick = () => {
+        loadRows().catch(() => {});
+      };
+    }
+
+    await loadRows();
+  }
+
   // Hide page content until auth is verified
   const main = document.querySelector("main");
   if (main) main.style.display = "none";
@@ -1424,6 +1545,7 @@
       initProfilesPage().catch(() => {});
       initHistoryFactsPage().catch(() => {});
       initChurchOfDayPage().catch(() => {});
+      initModerationPage().catch(() => {});
     })
     .catch(() => {});
 })();
