@@ -159,6 +159,12 @@ Key behavior:
 
 ## Single Entry Commands
 
+- Full single-listing pipeline (scrape + OpenAI synthesis + Supabase sync + hero image):
+  - `npm run pipeline:listing -- --list-entry=1291027`
+- Full single-listing pipeline, force rebuild/sync overwrite:
+  - `npm run pipeline:listing -- --list-entry=1291027 --overwrite-existing --openai-mode=force`
+- Full single-listing pipeline, skip hero image step:
+  - `npm run pipeline:listing -- --list-entry=1291027 --skip-image`
 - Build one listing:
   - `node ./scripts/build-church-profiles.mjs --list-entry=1291027 --retry-errors`
 - Force rebuild even if profile already exists:

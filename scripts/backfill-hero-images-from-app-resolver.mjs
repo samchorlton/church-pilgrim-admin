@@ -66,7 +66,8 @@ const cadwIdOffsetArg = Number(args.get("--cadw-id-offset") ?? "9000000000");
 const usePythonWikimediaResolver = args.has("--python-wikimedia-resolver");
 const pythonBin = args.get("--python-bin") ?? "python";
 const nhleDbPath = resolve("src/data/nhle-churches.db");
-const nhleDb = new DatabaseSync(nhleDbPath, { readOnly: true });
+const hasNhleDb = existsSync(nhleDbPath);
+const nhleDb = hasNhleDb ? new DatabaseSync(nhleDbPath, { readOnly: true }) : null;
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1520637836862-4d197d17c55a?auto=format&fit=crop&w=900&q=80";
@@ -955,6 +956,12 @@ function toJobRow(row) {
 }
 
 function fetchNhleMeta(listEntry) {
+  if (!nhleDb) {
+    return {
+      name: null,
+      hyperlink: null,
+    };
+  }
   try {
     const row = nhleDb
       .prepare(

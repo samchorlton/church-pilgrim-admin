@@ -354,9 +354,6 @@
         return;
       }
       items.forEach((item) => {
-        const moderationType = item.moderation_type || "memory";
-        const kindLabel =
-          moderationType === "people" ? "person" : String(item.memory_type || "memory").trim() || "memory";
         const moderationType = item.moderation_type || "text";
         const card = document.createElement("article");
         card.className = "moderation-item";
@@ -441,6 +438,9 @@
         return;
       }
       items.forEach((item) => {
+        const moderationType = item.moderation_type || "memory";
+        const kindLabel =
+          moderationType === "people" ? "person" : String(item.memory_type || "memory").trim() || "memory";
         const dateLabel = item.event_date
           ? `Event date: ${item.event_date}`
           : item.from_date || item.to_date
@@ -1468,6 +1468,10 @@
 
     const statusEl = document.getElementById("moderation-status");
     const refreshBtnEl = document.getElementById("moderation-refresh-btn");
+    const listingSubmissionsListEl = document.getElementById("listing-submissions-list");
+    const listingSubmissionsStatusEl = document.getElementById("listing-submissions-status");
+    const listingSubmissionsRefreshBtnEl = document.getElementById("listing-submissions-refresh-btn");
+    const listingSubmissionsStatusFilterEl = document.getElementById("listing-submissions-status-filter");
 
     const fmtCount = (value, label) => `${value} ${label}`;
 
@@ -1517,6 +1521,90 @@
       }
     };
 
+    const toSubmissionTitle = (row) =>
+      String(row?.title || row?.church_name || row?.name || `Submission #${row?.id || "?"}`).trim();
+
+    const toSubmissionSubtitle = (row) =>
+      String(row?.subtitle || row?.parish || row?.district || row?.county || row?.town || "").trim();
+
+    const toSubmissionImageUrl = (row) =>
+      String(row?.hero_image_url || row?.image_url || "").trim();
+
+    const renderListingSubmissions = (rows) => {
+      if (!listingSubmissionsListEl) return;
+      listingSubmissionsListEl.innerHTML = "";
+      if (!rows.length) {
+        listingSubmissionsListEl.innerHTML = "<div class='list-item mini'>No submissions found for this status.</div>";
+        return;
+      }
+      rows.forEach((row) => {
+        const title = toSubmissionTitle(row);
+        const subtitle = toSubmissionSubtitle(row);
+        const imageUrl = toSubmissionImageUrl(row);
+        const locationDescription = String(row?.location_description || "").trim();
+        const parish = String(row?.parish || "").trim();
+        const district = String(row?.district || "").trim();
+        const county = String(row?.county || "").trim();
+        const postcode = String(row?.postcode || "").trim();
+        const denomination = String(row?.denomination || "").trim();
+        const grade = String(row?.grade || "").trim();
+        const constructionDate = String(row?.construction_date || "").trim();
+        const websiteUrl = String(row?.website_url || "").trim();
+        const heritageUrl = String(row?.heritage_listing_url || "").trim();
+        const reason = String(row?.reason_for_submission || "").trim();
+        const storagePath = String(row?.hero_image_storage_path || "").trim();
+        const latitude = row?.latitude;
+        const longitude = row?.longitude;
+        const createdListEntry = Number(row?.created_list_entry);
+        const canOpenCreatedListing = Number.isInteger(createdListEntry) && createdListEntry > 0;
+        const card = document.createElement("article");
+        card.className = "moderation-item";
+        card.innerHTML = `
+          <h3 class="moderation-title">#${row.id} | ${htmlEscape(title)}</h3>
+          <p class="moderation-meta">Status: ${htmlEscape(row.status || "unknown")} | User: ${htmlEscape(row.user_id || "unknown")} | ${htmlEscape(row.created_at || "")}</p>
+          ${locationDescription ? `<div class="moderation-body"><strong>Location description:</strong> ${htmlEscape(locationDescription)}</div>` : ""}
+          ${subtitle ? `<div class="moderation-body"><strong>Location:</strong> ${htmlEscape(subtitle)}</div>` : ""}
+          ${(parish || district || county) ? `<div class="moderation-body"><strong>Parish/District/County:</strong> ${htmlEscape([parish, district, county].filter(Boolean).join(" / "))}</div>` : ""}
+          ${postcode ? `<div class="moderation-body"><strong>Postcode:</strong> ${htmlEscape(postcode)}</div>` : ""}
+          ${(latitude !== null && latitude !== undefined) || (longitude !== null && longitude !== undefined) ? `<div class="moderation-body"><strong>Coordinates:</strong> ${htmlEscape(`${latitude ?? "?"}, ${longitude ?? "?"}`)}</div>` : ""}
+          ${denomination ? `<div class="moderation-body"><strong>Denomination:</strong> ${htmlEscape(denomination)}</div>` : ""}
+          ${grade ? `<div class="moderation-body"><strong>Grade:</strong> ${htmlEscape(grade)}</div>` : ""}
+          ${constructionDate ? `<div class="moderation-body"><strong>Construction date:</strong> ${htmlEscape(constructionDate)}</div>` : ""}
+          ${row?.description ? `<div class="moderation-body"><strong>Description:</strong><br/>${htmlEscape(String(row.description)).replace(/\n/g, "<br/>")}</div>` : ""}
+          ${reason ? `<div class="moderation-body"><strong>Reason for submission:</strong><br/>${htmlEscape(reason).replace(/\n/g, "<br/>")}</div>` : ""}
+          ${websiteUrl ? `<div class="moderation-body"><a href="${htmlEscape(websiteUrl)}" target="_blank" rel="noreferrer">Open website URL</a></div>` : ""}
+          ${heritageUrl ? `<div class="moderation-body"><a href="${htmlEscape(heritageUrl)}" target="_blank" rel="noreferrer">Open heritage listing URL</a></div>` : ""}
+          ${imageUrl ? `<img class="moderation-media" src="${htmlEscape(imageUrl)}" alt="Listing submission image" />` : ""}
+          ${imageUrl ? `<div class="moderation-body"><a href="${htmlEscape(imageUrl)}" target="_blank" rel="noreferrer">Open image</a></div>` : ""}
+          ${storagePath ? `<div class="moderation-body"><strong>Image storage path:</strong> ${htmlEscape(storagePath)}</div>` : ""}
+          <div class="moderation-body"><strong>created_list_entry:</strong> ${canOpenCreatedListing ? createdListEntry : "not set"}</div>
+          <div class="moderation-actions">
+            <textarea data-submission-notes="${row.id}" class="span-2" placeholder="Admin notes">${htmlEscape(row.admin_notes || "")}</textarea>
+            <button data-action="approve-submission" data-id="${row.id}">Approve + Create/Update Listing</button>
+            <button data-action="reject-submission" data-id="${row.id}" class="danger">Reject</button>
+            <button data-action="duplicate-submission" data-id="${row.id}" class="ghost">Mark Duplicate</button>
+            <button data-action="pending-submission" data-id="${row.id}" class="ghost">Mark Pending</button>
+            ${canOpenCreatedListing ? `<button data-action="open-created-listing" data-list-entry="${createdListEntry}" class="ghost">Open Created Listing</button>` : ""}
+          </div>
+        `;
+        listingSubmissionsListEl.appendChild(card);
+      });
+    };
+
+    const loadListingSubmissions = async () => {
+      if (!listingSubmissionsListEl) return;
+      const status = String(listingSubmissionsStatusFilterEl?.value || "pending").trim();
+      setMessage(listingSubmissionsStatusEl, "Loading listing submissions...");
+      try {
+        const data = await fetchJson(`/api/moderation/listing-submissions?status=${encodeURIComponent(status)}`);
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        renderListingSubmissions(rows);
+        setMessage(listingSubmissionsStatusEl, `${rows.length} submissions (${status})`, "success");
+      } catch (error) {
+        setMessage(listingSubmissionsStatusEl, error.message, "error");
+      }
+    };
+
     listEl.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action='open-listing']");
       if (!button) return;
@@ -1525,13 +1613,61 @@
       window.location.href = `/church-profiles?section=moderation&listingId=${listEntry}`;
     });
 
+    listingSubmissionsListEl?.addEventListener("click", async (event) => {
+      const openBtn = event.target.closest("button[data-action='open-created-listing']");
+      if (openBtn) {
+        const listEntry = Number(openBtn.getAttribute("data-list-entry"));
+        if (Number.isInteger(listEntry) && listEntry > 0) {
+          window.location.href = `/church-profiles?section=moderation&listingId=${listEntry}`;
+        }
+        return;
+      }
+
+      const actionBtn = event.target.closest("button[data-action$='-submission']");
+      if (!actionBtn) return;
+      const id = Number(actionBtn.getAttribute("data-id"));
+      if (!Number.isInteger(id) || id <= 0) return;
+      const action = String(actionBtn.getAttribute("data-action") || "");
+      const status =
+        action === "approve-submission"
+          ? "approved"
+          : action === "reject-submission"
+            ? "rejected"
+            : action === "duplicate-submission"
+              ? "duplicate"
+            : "pending";
+      const notesEl = actionBtn.parentElement?.querySelector(`textarea[data-submission-notes="${id}"]`);
+      const adminNotes = notesEl ? notesEl.value.trim() : "";
+      try {
+        actionBtn.disabled = true;
+        await fetchJson(`/api/moderation/listing-submissions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, admin_notes: adminNotes || null }),
+        });
+        await Promise.all([loadListingSubmissions(), loadRows()]);
+      } catch (error) {
+        setMessage(listingSubmissionsStatusEl, error.message, "error");
+      } finally {
+        actionBtn.disabled = false;
+      }
+    });
+
     if (refreshBtnEl) {
       refreshBtnEl.onclick = () => {
         loadRows().catch(() => {});
       };
     }
+    if (listingSubmissionsRefreshBtnEl) {
+      listingSubmissionsRefreshBtnEl.onclick = () => {
+        loadListingSubmissions().catch(() => {});
+      };
+    }
+    listingSubmissionsStatusFilterEl?.addEventListener("change", () => {
+      loadListingSubmissions().catch(() => {});
+    });
 
-    await loadRows();
+    await Promise.all([loadRows(), loadListingSubmissions()]);
   }
 
   // Hide page content until auth is verified

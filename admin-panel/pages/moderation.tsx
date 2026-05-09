@@ -30,6 +30,22 @@ export default function ModerationPage() {
           </div>
           <div id="moderation-list" className="queue-list"></div>
         </section>
+
+        <section className="panel">
+          <h2>Church Listing Submissions</h2>
+          <p className="note">Review pending church listing submissions and approve them into the canonical listing table.</p>
+          <div className="row">
+            <select id="listing-submissions-status-filter">
+              <option value="pending">pending</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+              <option value="duplicate">duplicate</option>
+            </select>
+            <button id="listing-submissions-refresh-btn" className="ghost">Refresh Submissions</button>
+            <span id="listing-submissions-status" className="mini"></span>
+          </div>
+          <div id="listing-submissions-list" className="queue-list"></div>
+        </section>
       </main>
       <Script src="/common.js" strategy="afterInteractive" />
     </>

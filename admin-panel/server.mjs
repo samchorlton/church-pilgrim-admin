@@ -833,6 +833,15 @@ function parseModerationStatus(value) {
   throw new Error("Status must be pending, approved, or rejected.");
 }
 
+function parseListingSubmissionStatus(value) {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (!status) return null;
+  if (status === "pending" || status === "approved" || status === "rejected" || status === "duplicate") {
+    return status;
+  }
+  throw new Error("Status must be pending, approved, rejected, or duplicate.");
+}
+
 function parseMemoryType(value) {
   const type = String(value ?? "").trim().toLowerCase();
   if (!type) return null;
@@ -1082,6 +1091,81 @@ function buildChurchOfDayPayload(input, forCreate) {
   if (hasListEntry) payload.list_entry = listEntry;
   if ("rich_summary" in input) payload.rich_summary = cleanString(input.rich_summary);
   return payload;
+}
+
+function pickFirstNonEmpty(...values) {
+  for (const value of values) {
+    const cleaned = cleanString(value);
+    if (cleaned) return cleaned;
+  }
+  return null;
+}
+
+function parsePositiveIntOrNull(value) {
+  const cleaned = cleanString(value);
+  if (!cleaned) return null;
+  const num = Number(cleaned);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
+}
+
+function buildChurchPayloadFromListingSubmission(submission) {
+  const title = pickFirstNonEmpty(submission?.title, submission?.church_name, submission?.name);
+  if (!title) {
+    throw new Error("Submission is missing a title/church name.");
+  }
+
+  const listEntry = parsePositiveIntOrNull(
+    pickFirstNonEmpty(
+      submission?.list_entry,
+      submission?.proposed_list_entry,
+      submission?.nhle_list_entry,
+      submission?.nhle_id
+    )
+  );
+
+  const subtitle = pickFirstNonEmpty(
+    submission?.subtitle,
+    submission?.location_description,
+    submission?.parish,
+    submission?.district,
+    submission?.county,
+    submission?.town,
+    submission?.location_label
+  );
+
+  return {
+    payload: {
+      list_entry: listEntry,
+      title,
+      subtitle: subtitle ?? null,
+      summary: pickFirstNonEmpty(submission?.summary, submission?.description, submission?.body_text, submission?.reason_for_submission),
+      hero_image_url: pickFirstNonEmpty(submission?.hero_image_url, submission?.image_url),
+      source_url: pickFirstNonEmpty(submission?.heritage_listing_url),
+      church_website: pickFirstNonEmpty(submission?.website_url),
+      parish: pickFirstNonEmpty(submission?.parish),
+      district: pickFirstNonEmpty(submission?.district),
+      county: pickFirstNonEmpty(submission?.county),
+      lat: submission?.latitude ?? null,
+      lng: submission?.longitude ?? null,
+      grade: pickFirstNonEmpty(submission?.grade),
+      construction_date: validateConstructionDate(submission?.construction_date),
+      additional_info: pickFirstNonEmpty(
+        submission?.description,
+        submission?.reason_for_submission
+      ),
+      editorial_notes: [
+        pickFirstNonEmpty(submission?.reason_for_submission) ? `Submission reason: ${submission.reason_for_submission}` : null,
+        pickFirstNonEmpty(submission?.denomination) ? `Denomination: ${submission.denomination}` : null,
+        pickFirstNonEmpty(submission?.postcode) ? `Postcode: ${submission.postcode}` : null,
+        pickFirstNonEmpty(submission?.hero_image_storage_path) ? `Hero storage path: ${submission.hero_image_storage_path}` : null,
+      ].filter(Boolean).join("\n") || null,
+      current_usage: pickFirstNonEmpty(submission?.current_usage),
+      editorial_status: "draft",
+      updated_at: new Date().toISOString(),
+    },
+    listEntry,
+  };
 }
 
 async function serveStatic(pathname, res) {
@@ -1425,6 +1509,108 @@ export async function handleRequest(req, res) {
         });
 
       sendJson(res, 200, { rows });
+    } catch (error) {
+      sendJson(res, 400, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname === "/api/moderation/listing-submissions" && method === "GET") {
+    if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
+    try {
+      const status = parseListingSubmissionStatus(requestUrl.searchParams.get("status")) ?? "pending";
+      const rows = await supabaseRequest(
+        `church_listing_submissions?select=*&status=eq.${status}&order=created_at.asc&limit=300`
+      );
+      sendJson(res, 200, { rows: Array.isArray(rows) ? rows : [], status });
+    } catch (error) {
+      sendJson(res, 400, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/moderation/listing-submissions/") && method === "PATCH") {
+    if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
+    const submissionId = Number(pathname.replace("/api/moderation/listing-submissions/", ""));
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      sendJson(res, 400, { error: "Invalid submission id." });
+      return;
+    }
+    try {
+      const parsed = await parseJsonBody(req);
+      const status = parseListingSubmissionStatus(parsed.status);
+      if (!status) {
+        sendJson(res, 400, { error: "Status is required." });
+        return;
+      }
+      const adminNotes = cleanString(parsed.admin_notes);
+
+      let createdListEntry = null;
+      if (status === "approved") {
+        const rows = await supabaseRequest(
+          `church_listing_submissions?id=eq.${submissionId}&select=*&limit=1`
+        );
+        const submission = rows?.[0];
+        if (!submission) {
+          sendJson(res, 404, { error: "Submission not found." });
+          return;
+        }
+
+        const { payload, listEntry } = buildChurchPayloadFromListingSubmission(submission);
+        let churchRow = null;
+        if (listEntry) {
+          const existingRows = await supabaseRequest(
+            `churches_v2?list_entry=eq.${listEntry}&select=id,list_entry&limit=1`
+          );
+          const existing = existingRows?.[0];
+          if (existing?.id) {
+            const updatedRows = await supabaseRequest(`churches_v2?id=eq.${existing.id}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=representation" },
+              body: JSON.stringify(payload),
+            });
+            churchRow = updatedRows?.[0] ?? null;
+          } else {
+            const createdRows = await supabaseRequest("churches_v2", {
+              method: "POST",
+              headers: { Prefer: "return=representation" },
+              body: JSON.stringify(payload),
+            });
+            churchRow = createdRows?.[0] ?? null;
+          }
+        } else {
+          const createdRows = await supabaseRequest("churches_v2", {
+            method: "POST",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify(payload),
+          });
+          churchRow = createdRows?.[0] ?? null;
+        }
+
+        createdListEntry = parsePositiveIntOrNull(churchRow?.list_entry);
+      }
+
+      const updatedRows = await supabaseRequest(`church_listing_submissions?id=eq.${submissionId}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          status,
+          admin_notes: adminNotes,
+          created_list_entry: createdListEntry,
+          reviewed_by: authContext.user.id,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      sendJson(res, 200, { row: updatedRows?.[0] ?? null });
     } catch (error) {
       sendJson(res, 400, { error: String(error.message || error) });
     }

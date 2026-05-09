@@ -13,6 +13,7 @@
     "build:church-profiles:batch": "node ./scripts/run-build-church-profiles-batch.mjs",
     "build:church-profiles:remaining": "node ./scripts/run-build-remaining-church-profiles.mjs",
     "build:church-profiles:remaining:python": "node ./scripts/run-build-remaining-church-profiles.mjs --python-scraper",
+    "pipeline:listing": "node ./scripts/run-listing-full-pipeline.mjs",
     "backfill:hero-images": "node ./scripts/backfill-hero-images-from-app-resolver.mjs",
     "sync:profiles:supabase": "node ./scripts/sync-profiles-to-supabase.mjs",
     "sync:listings:supabase": "node ./scripts/import-church-listing-points-to-supabase.mjs",

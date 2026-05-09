@@ -55,6 +55,14 @@ function parseJsonOrNull(value) {
   }
 }
 
+function normalizeDateForSupabase(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  // Accept only full YYYY-MM-DD for date columns.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return null;
+}
+
 function readRows() {
   const singleFilter = singleListEntry > 0 ? `WHERE app.list_entry = ${singleListEntry}` : "";
   const sql = `
@@ -132,7 +140,9 @@ async function upsertBatch(batch) {
       additional_info: profile?.contentBlocks?.folklore ?? null,
       grade: normalized?.grade ?? supplementary?.grade ?? null,
       heritage_category: normalized?.heritageCategory ?? null,
-      date_first_listed: normalized?.dateFirstListed ?? supplementary?.listedDate ?? null,
+      date_first_listed: normalizeDateForSupabase(
+        normalized?.dateFirstListed ?? supplementary?.listedDate ?? null
+      ),
       lat: toNumberOrNull(normalized?.latitude),
       lng: toNumberOrNull(normalized?.longitude),
       completeness_score: toNumberOrNull(normalized?.completenessScore),

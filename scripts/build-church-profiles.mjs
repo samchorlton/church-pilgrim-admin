@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import {
   CloudflareBlockedError,
@@ -69,8 +69,11 @@ const wikipediaMode = ["auto", "refresh", "off"].includes(wikipediaModeRaw)
 
 const sourceDbPath = resolve("src/data/nhle-churches.db");
 const profileDbPath = resolve("src/data/nhle-profiles.db");
-
-const sourceDb = new DatabaseSync(sourceDbPath, { readonly: true });
+const hasSourceDb = existsSync(sourceDbPath);
+if (!existsSync(dirname(profileDbPath))) {
+  mkdirSync(dirname(profileDbPath), { recursive: true });
+}
+const sourceDb = hasSourceDb ? new DatabaseSync(sourceDbPath, { readonly: true }) : null;
 const profileDb = new DatabaseSync(profileDbPath);
 const runMetrics = {
   openaiCalls: 0,
@@ -853,7 +856,7 @@ function seedQueue() {
   `);
 
   let rows = [];
-  if (selectedListEntries.length > 0) {
+  if (selectedListEntries.length > 0 && sourceDb) {
     const chunkSize = 400;
     for (let i = 0; i < selectedListEntries.length; i += chunkSize) {
       const chunk = selectedListEntries.slice(i, i + chunkSize);
@@ -863,16 +866,28 @@ function seedQueue() {
         `WHERE ListEntry IN (${placeholders})`;
       rows.push(...sourceDb.prepare(sql).all(...chunk));
     }
+  } else if (selectedListEntries.length > 0 && !sourceDb) {
+    rows = selectedListEntries.map((id) => ({
+      ListEntry: id,
+      hyperlink: `https://historicengland.org.uk/listing/the-list/list-entry/${id}`,
+    }));
   } else {
+    if (!sourceDb) {
+      throw new Error(
+        "Missing source DB at src/data/nhle-churches.db. Pass --list-entry=<id> (or --input/--list-entries) for direct mode."
+      );
+    }
     rows = sourceDb
       .prepare("SELECT ListEntry, hyperlink FROM Listed_Building_points WHERE ListEntry IS NOT NULL")
       .all();
   }
 
-  const foundSet = new Set(rows.map((row) => Number(row.ListEntry)));
-  const missing = selectedListEntries.filter((id) => !foundSet.has(id));
-  if (missing.length > 0) {
-    console.warn(`[seed] ${missing.length} listing id(s) were not found in source DB.`);
+  if (sourceDb) {
+    const foundSet = new Set(rows.map((row) => Number(row.ListEntry)));
+    const missing = selectedListEntries.filter((id) => !foundSet.has(id));
+    if (missing.length > 0) {
+      console.warn(`[seed] ${missing.length} listing id(s) were not found in source DB.`);
+    }
   }
 
   profileDb.exec("BEGIN");
@@ -1131,7 +1146,7 @@ async function processOne(row) {
     if (response.ok) {
       rawHtml = response.html;
       parsed = parseNhle(rawHtml, listEntry, sourceUrl);
-    } else if (response.status === 403) {
+    } else if (response.status === 403 && sourceDb) {
       const sourceRow = sourceDb
         .prepare(
           "SELECT Name, Grade, NGR, ListDate, AmendDate, Easting, Northing FROM Listed_Building_points WHERE ListEntry = ? LIMIT 1"
@@ -1281,6 +1296,6 @@ run()
   })
   .finally(() => {
     closePuppeteerBrowserPool().catch(() => {});
-    sourceDb.close();
+    if (sourceDb) sourceDb.close();
     profileDb.close();
   });
