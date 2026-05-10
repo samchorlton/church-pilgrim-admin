@@ -1653,6 +1653,32 @@ export async function handleRequest(req, res) {
         return;
       }
       const adminNotes = cleanString(parsed.admin_notes);
+
+      // For current_usage suggestions, apply the approved value to churches_v2.
+      if (targetType === "text" && status === "approved") {
+        const sourceRows = await supabaseRequest(
+          `church_contributions?id=eq.${targetId}&select=id,list_entry,contribution_type,suggested_content&limit=1`
+        );
+        const source = sourceRows?.[0];
+        const listEntry = Number(source?.list_entry);
+        const contributionType = String(source?.contribution_type || "").trim().toLowerCase();
+        if (contributionType === "current_usage") {
+          if (!Number.isInteger(listEntry) || listEntry <= 0) {
+            sendJson(res, 400, { error: "current_usage contribution has invalid list_entry." });
+            return;
+          }
+          const suggestedCurrentUsage = cleanString(source?.suggested_content);
+          await supabaseRequest(`churches_v2?list_entry=eq.${listEntry}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              current_usage: suggestedCurrentUsage,
+              updated_at: new Date().toISOString(),
+            }),
+          });
+        }
+      }
+
       const rows = await supabaseRequest(`${tableName}?id=eq.${targetId}`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
