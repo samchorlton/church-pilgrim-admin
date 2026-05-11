@@ -1891,7 +1891,7 @@ export async function handleRequest(req, res) {
     const segments = pathname.split("/").filter(Boolean);
     const validPrefix =
       segments.length >= 4 &&
-      segments.length <= 6 &&
+      segments.length <= 7 &&
       segments[0] === "api" &&
       segments[1] === "content" &&
       segments[2] === "church-profiles";
@@ -1902,8 +1902,59 @@ export async function handleRequest(req, res) {
     const parsedListEntry = Number(segments[3]);
     const action = segments[4] ?? null;
     const actionId = segments[5] ?? null;
+    const actionSubId = segments[6] ?? null;
     if (!Number.isInteger(parsedListEntry) || parsedListEntry <= 0) {
       sendJson(res, 400, { error: "Invalid list entry." });
+      return;
+    }
+
+    if (action === "media" && method === "GET" && !actionId) {
+      try {
+        const [imageRows, audioRows] = await Promise.all([
+          supabaseRequest(
+            `church_image_contributions?list_entry=eq.${parsedListEntry}&status=eq.approved&select=id,user_id,list_entry,image_url,image_caption,image_credit,status,admin_notes,created_at,updated_at&order=created_at.desc&limit=500`
+          ),
+          supabaseRequest(
+            `church_audio_contributions?list_entry=eq.${parsedListEntry}&status=eq.approved&select=id,user_id,list_entry,audio_url,audio_title,audio_credit,file_name,mime_type,file_size_bytes,status,admin_notes,created_at,updated_at&order=created_at.desc&limit=500`
+          ),
+        ]);
+        sendJson(res, 200, {
+          images: Array.isArray(imageRows) ? imageRows : [],
+          audio: Array.isArray(audioRows) ? audioRows : [],
+          list_entry: parsedListEntry,
+        });
+      } catch (error) {
+        sendJson(res, 500, { error: String(error.message || error) });
+      }
+      return;
+    }
+
+    if (action === "media" && method === "DELETE" && actionId && actionSubId) {
+      const mediaType = String(actionId).trim().toLowerCase();
+      const mediaId = Number(actionSubId);
+      if (!Number.isInteger(mediaId) || mediaId <= 0) {
+        sendJson(res, 400, { error: "Invalid media id." });
+        return;
+      }
+      const tableName =
+        mediaType === "image"
+          ? "church_image_contributions"
+          : mediaType === "audio"
+            ? "church_audio_contributions"
+            : null;
+      if (!tableName) {
+        sendJson(res, 400, { error: "Unsupported media type. Use image or audio." });
+        return;
+      }
+      try {
+        await supabaseRequest(`${tableName}?id=eq.${mediaId}&list_entry=eq.${parsedListEntry}`, {
+          method: "DELETE",
+          headers: { Prefer: "return=minimal" },
+        });
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 500, { error: String(error.message || error) });
+      }
       return;
     }
 

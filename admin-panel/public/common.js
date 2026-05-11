@@ -881,6 +881,7 @@
         selectedProfile = data.row;
         setProfileForm(selectedProfile);
         await loadPeople();
+        await loadApprovedMedia();
         renderProfiles();
         if (moderationWorkspace) {
           await moderationWorkspace.loadQueue();
@@ -1060,11 +1061,14 @@
 
     let selectedPerson = null;
     let peopleRows = [];
+    let approvedMediaRows = [];
     const peopleListEl = document.getElementById("p-people-list");
     const peopleStatusEl = document.getElementById("p-people-status");
     const peopleMessageEl = document.getElementById("p-people-message");
     const personImagePreviewEl = document.getElementById("pp-image-preview");
     const personImageFileEl = document.getElementById("pp-image-file");
+    const profileMediaListEl = document.getElementById("profile-media-list");
+    const profileMediaStatusEl = document.getElementById("profile-media-status");
 
     const setPeopleForm = (row) => {
       const set = (id, value) => {
@@ -1117,6 +1121,87 @@
     const currentListEntry = () => {
       const listEntry = Number(document.getElementById("p-list-entry").value);
       return Number.isInteger(listEntry) && listEntry > 0 ? listEntry : null;
+    };
+
+    const renderApprovedMedia = () => {
+      if (!profileMediaListEl) return;
+      profileMediaListEl.innerHTML = "";
+      if (!approvedMediaRows.length) {
+        profileMediaListEl.innerHTML = "<div class='list-item mini'>No approved uploaded media found for this listing.</div>";
+        return;
+      }
+      approvedMediaRows.forEach((item) => {
+        const card = document.createElement("article");
+        card.className = "moderation-item";
+        if (item.type === "image") {
+          card.innerHTML = `
+            <h3 class="moderation-title">Image #${item.id} | List ${item.list_entry}</h3>
+            <p class="moderation-meta">Approved | ${htmlEscape(item.created_at || "")}</p>
+            ${item.image_url ? `<img class="moderation-media" src="${htmlEscape(item.image_url)}" alt="Approved uploaded image" />` : ""}
+            <div class="moderation-body"><strong>Caption:</strong> ${htmlEscape(item.image_caption || "None")}</div>
+            <div class="moderation-body"><strong>Credit:</strong> ${htmlEscape(item.image_credit || "None")}</div>
+            ${item.image_url ? `<div class="moderation-body"><a href="${htmlEscape(item.image_url)}" target="_blank" rel="noreferrer">Open image</a></div>` : ""}
+            <div class="moderation-actions">
+              <button data-media-action="remove" data-media-type="image" data-media-id="${item.id}" class="danger">Remove</button>
+            </div>
+          `;
+        } else {
+          card.innerHTML = `
+            <h3 class="moderation-title">Audio #${item.id} | List ${item.list_entry}</h3>
+            <p class="moderation-meta">Approved | ${htmlEscape(item.created_at || "")}</p>
+            <div class="moderation-body"><strong>Title:</strong> ${htmlEscape(item.audio_title || "None")}</div>
+            <div class="moderation-body"><strong>Credit:</strong> ${htmlEscape(item.audio_credit || "None")}</div>
+            <div class="moderation-body"><strong>File:</strong> ${htmlEscape(item.file_name || "Unknown")} (${htmlEscape(item.mime_type || "unknown")})</div>
+            ${item.audio_url ? `<audio controls style="width:100%; margin-bottom:8px;"><source src="${htmlEscape(item.audio_url)}" /></audio>` : ""}
+            ${item.audio_url ? `<div class="moderation-body"><a href="${htmlEscape(item.audio_url)}" target="_blank" rel="noreferrer">Open audio</a></div>` : ""}
+            <div class="moderation-actions">
+              <button data-media-action="remove" data-media-type="audio" data-media-id="${item.id}" class="danger">Remove</button>
+            </div>
+          `;
+        }
+        profileMediaListEl.appendChild(card);
+      });
+    };
+
+    const loadApprovedMedia = async () => {
+      const listEntry = currentListEntry();
+      if (!listEntry) {
+        approvedMediaRows = [];
+        renderApprovedMedia();
+        setMessage(profileMediaStatusEl, "Select a saved profile to review approved media.");
+        return;
+      }
+      setMessage(profileMediaStatusEl, "Loading approved media...");
+      try {
+        const data = await fetchJson(`/api/content/church-profiles/${listEntry}/media`);
+        const imageRows = Array.isArray(data?.images) ? data.images.map((row) => ({ ...row, type: "image" })) : [];
+        const audioRows = Array.isArray(data?.audio) ? data.audio.map((row) => ({ ...row, type: "audio" })) : [];
+        approvedMediaRows = [...imageRows, ...audioRows].sort(
+          (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        );
+        renderApprovedMedia();
+        setMessage(profileMediaStatusEl, `${imageRows.length} images, ${audioRows.length} audio approved`, "success");
+      } catch (error) {
+        setMessage(profileMediaStatusEl, error.message, "error");
+      }
+    };
+
+    const removeApprovedMedia = async (mediaType, mediaId, button) => {
+      const listEntry = currentListEntry();
+      if (!listEntry) return;
+      const label = mediaType === "audio" ? "audio item" : "image";
+      if (!confirm(`Remove approved ${label} #${mediaId}? This cannot be undone.`)) return;
+      try {
+        if (button) button.disabled = true;
+        await fetchJson(`/api/content/church-profiles/${listEntry}/media/${mediaType}/${mediaId}`, {
+          method: "DELETE",
+        });
+        await loadApprovedMedia();
+      } catch (error) {
+        setMessage(profileMediaStatusEl, error.message, "error");
+      } finally {
+        if (button) button.disabled = false;
+      }
     };
 
     const loadPeople = async () => {
@@ -1247,6 +1332,8 @@
         await fetchJson(`/api/content/church-profiles/${listEntry}`, { method: "DELETE" });
         selectedProfile = null;
         setProfileForm(null);
+        approvedMediaRows = [];
+        renderApprovedMedia();
         await loadProfiles();
         updateUrlParams({ listingId: null });
         if (moderationWorkspace) {
@@ -1267,6 +1354,9 @@
       await loadProfiles();
       if (requestedListingId && requestedListingId > 0) {
         await selectProfileByListEntry(requestedListingId, { syncUrl: false });
+      } else {
+        await loadPeople();
+        await loadApprovedMedia();
       }
     } catch (error) {
       setMessage(statusEl, error.message, "error");
@@ -1288,6 +1378,8 @@
       setPeopleForm(null);
       peopleRows = [];
       renderPeople();
+      approvedMediaRows = [];
+      renderApprovedMedia();
       setMessage(messageEl, "Creating a new profile.");
       updateUrlParams({ listingId: null });
       if (moderationWorkspace) {
@@ -1302,6 +1394,17 @@
     document.getElementById("p-people-refresh-btn").onclick = () => {
       loadPeople().catch(() => {});
     };
+    document.getElementById("profile-media-refresh-btn").onclick = () => {
+      loadApprovedMedia().catch(() => {});
+    };
+    profileMediaListEl?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-media-action='remove']");
+      if (!button) return;
+      const mediaType = String(button.getAttribute("data-media-type") || "").trim();
+      const mediaId = Number(button.getAttribute("data-media-id"));
+      if (!Number.isInteger(mediaId) || mediaId <= 0) return;
+      removeApprovedMedia(mediaType, mediaId, button).catch(() => {});
+    });
     document.getElementById("p-people-new-btn").onclick = () => {
       selectedPerson = null;
       setPeopleForm(null);

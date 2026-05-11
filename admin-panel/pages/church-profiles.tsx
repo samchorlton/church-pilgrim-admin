@@ -189,6 +189,14 @@ export default function ChurchProfilesPage() {
                   <h3 className="subsection-title">Memories / Traditions / People</h3>
                   <div id="profile-mod-memory-list" className="queue-list"></div>
 
+                  <h3 className="subsection-title">Approved Media</h3>
+                  <p className="note">Review approved uploaded media for this listing and remove items if needed.</p>
+                  <div className="row">
+                    <button id="profile-media-refresh-btn" type="button" className="ghost">Refresh Approved Media</button>
+                    <span id="profile-media-status" className="mini"></span>
+                  </div>
+                  <div id="profile-media-list" className="queue-list"></div>
+
                   <h3 className="subsection-title">People (Admin Edit)</h3>
                   <p className="note">Create, edit, and upload images for people associated with this church listing.</p>
                   <div className="row">
