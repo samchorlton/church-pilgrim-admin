@@ -86,12 +86,16 @@
   function convertNewlinesToBr(value) {
     if (value === null || value === undefined) return value;
     return String(value)
+      .replace(/<!--\s*StartFragment\s*-->/gi, "")
+      .replace(/<!--\s*EndFragment\s*-->/gi, "")
       .replace(/\\n/g, "\n")
       .replace(/\r\n|\r|\n/g, "<br>");
   }
 
   function sanitizeRichHtml(value) {
     return String(value ?? "")
+      .replace(/<!--\s*StartFragment\s*-->/gi, "")
+      .replace(/<!--\s*EndFragment\s*-->/gi, "")
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
       .replace(/\son\w+="[^"]*"/gi, "")

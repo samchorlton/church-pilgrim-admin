@@ -219,7 +219,10 @@ function parseJsonBody(req) {
 
 function cleanString(value) {
   if (value === null || value === undefined) return null;
-  const normalized = String(value).trim();
+  const normalized = String(value)
+    .replace(/<!--\s*StartFragment\s*-->/gi, "")
+    .replace(/<!--\s*EndFragment\s*-->/gi, "")
+    .trim();
   return normalized.length ? normalized : null;
 }
 
