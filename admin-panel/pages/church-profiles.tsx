@@ -21,6 +21,7 @@ export default function ChurchProfilesPage() {
           <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
+          <a className="nav-link" href="/announcements">Announcements</a>
         </nav>
 
         <section className="panel">
@@ -186,6 +187,39 @@ export default function ChurchProfilesPage() {
                   <div id="profile-mod-audio-list" className="queue-list"></div>
                   <h3 className="subsection-title">Memories / Traditions / People</h3>
                   <div id="profile-mod-memory-list" className="queue-list"></div>
+
+                  <h3 className="subsection-title">People (Admin Edit)</h3>
+                  <p className="note">Create, edit, and upload images for people associated with this church listing.</p>
+                  <div className="row">
+                    <button id="p-people-refresh-btn" type="button" className="ghost">Refresh People</button>
+                    <button id="p-people-new-btn" type="button" className="ghost">New Person</button>
+                    <span id="p-people-status" className="mini"></span>
+                  </div>
+                  <div className="split">
+                    <div><div id="p-people-list" className="list"></div></div>
+                    <div>
+                      <div className="form-grid">
+                        <input id="pp-id" placeholder="ID" disabled />
+                        <input id="pp-title" placeholder="Name / Title" />
+                        <input id="pp-role" placeholder="Role (optional)" />
+                        <input id="pp-from-date" type="date" placeholder="From date" />
+                        <input id="pp-to-date" type="date" placeholder="To date" />
+                        <textarea id="pp-body-text" className="span-2" placeholder="Person content"></textarea>
+                        <input id="pp-image-url" className="span-2" placeholder="Image URL" />
+                        <input id="pp-image-storage-path" className="span-2" placeholder="Image storage path" disabled />
+                        <div className="span-2 row">
+                          <input id="pp-image-file" type="file" accept="image/*" />
+                          <button id="pp-image-upload-btn" type="button">Upload Person Image</button>
+                        </div>
+                        <img id="pp-image-preview" alt="Person image preview" className="hero-preview span-2" style={{ display: "none" }} />
+                      </div>
+                      <div className="row">
+                        <button id="pp-save-btn" type="button">Save Person</button>
+                        <button id="pp-delete-btn" type="button" className="danger">Delete Person</button>
+                        <span id="p-people-message" className="mini"></span>
+                      </div>
+                    </div>
+                  </div>
 
                   <h3 className="subsection-title">Stories & Folklore (Admin Create)</h3>
                   <p className="note">Create folklore stories that will be auto-approved and appear in the Stories & Folklore tab.</p>

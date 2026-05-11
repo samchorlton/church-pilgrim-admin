@@ -21,6 +21,7 @@ export default function HistoryFactsPage() {
           <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link active" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
+          <a className="nav-link" href="/announcements">Announcements</a>
         </nav>
 
         <section className="panel">

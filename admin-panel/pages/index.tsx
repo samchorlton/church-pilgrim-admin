@@ -20,6 +20,7 @@ export default function HomePage() {
           <a className="nav-link" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
+          <a className="nav-link" href="/announcements">Announcements</a>
         </nav>
 
         <section className="panel">
@@ -40,6 +41,10 @@ export default function HomePage() {
             <a className="tile" href="/church-of-day">
               <h3>Church of the Day</h3>
               <p>Set the daily featured church and optional rich summary override.</p>
+            </a>
+            <a className="tile" href="/announcements">
+              <h3>Announcements</h3>
+              <p>Manage active and scheduled site announcements.</p>
             </a>
           </div>
         </section>

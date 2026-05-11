@@ -876,6 +876,7 @@
         const data = await fetchJson(`/api/content/church-profiles/${numericListEntry}`);
         selectedProfile = data.row;
         setProfileForm(selectedProfile);
+        await loadPeople();
         renderProfiles();
         if (moderationWorkspace) {
           await moderationWorkspace.loadQueue();
@@ -1053,6 +1054,184 @@
       }
     };
 
+    let selectedPerson = null;
+    let peopleRows = [];
+    const peopleListEl = document.getElementById("p-people-list");
+    const peopleStatusEl = document.getElementById("p-people-status");
+    const peopleMessageEl = document.getElementById("p-people-message");
+    const personImagePreviewEl = document.getElementById("pp-image-preview");
+    const personImageFileEl = document.getElementById("pp-image-file");
+
+    const setPeopleForm = (row) => {
+      const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value ?? "";
+      };
+      set("pp-id", row?.id);
+      set("pp-title", row?.title);
+      set("pp-role", row?.role);
+      set("pp-from-date", row?.from_date);
+      set("pp-to-date", row?.to_date);
+      set("pp-body-text", decodeEscapedNewlines(row?.body_text ?? ""));
+      set("pp-image-url", row?.image_url);
+      set("pp-image-storage-path", row?.image_storage_path);
+      const imageUrl = String(row?.image_url || "").trim();
+      if (personImagePreviewEl) {
+        if (imageUrl) {
+          personImagePreviewEl.src = imageUrl;
+          personImagePreviewEl.style.display = "";
+        } else {
+          personImagePreviewEl.removeAttribute("src");
+          personImagePreviewEl.style.display = "none";
+        }
+      }
+    };
+
+    const renderPeople = () => {
+      if (!peopleListEl) return;
+      peopleListEl.innerHTML = "";
+      if (!peopleRows.length) {
+        peopleListEl.innerHTML = "<div class='list-item mini'>No people entries found.</div>";
+        return;
+      }
+      peopleRows.forEach((row) => {
+        const item = document.createElement("div");
+        item.className = `list-item ${selectedPerson && selectedPerson.id === row.id ? "active" : ""}`;
+        item.innerHTML = `
+          <h4>${htmlEscape(row.title || `Person ${row.id}`)}</h4>
+          <div class="mini">${htmlEscape(row.role || "No role")} | ${htmlEscape(row.status || "unknown")}</div>
+        `;
+        item.onclick = () => {
+          selectedPerson = row;
+          setPeopleForm(selectedPerson);
+          renderPeople();
+        };
+        peopleListEl.appendChild(item);
+      });
+    };
+
+    const currentListEntry = () => {
+      const listEntry = Number(document.getElementById("p-list-entry").value);
+      return Number.isInteger(listEntry) && listEntry > 0 ? listEntry : null;
+    };
+
+    const loadPeople = async () => {
+      const listEntry = currentListEntry();
+      if (!listEntry) {
+        peopleRows = [];
+        selectedPerson = null;
+        setPeopleForm(null);
+        renderPeople();
+        setMessage(peopleStatusEl, "Select a saved profile to manage people.");
+        return;
+      }
+      setMessage(peopleStatusEl, "Loading people...");
+      try {
+        const data = await fetchJson(`/api/content/church-profiles/${listEntry}/people`);
+        peopleRows = Array.isArray(data?.rows) ? data.rows : [];
+        if (selectedPerson) {
+          selectedPerson = peopleRows.find((row) => row.id === selectedPerson.id) || null;
+        }
+        setPeopleForm(selectedPerson);
+        renderPeople();
+        setMessage(peopleStatusEl, `${peopleRows.length} people loaded`, "success");
+      } catch (error) {
+        setMessage(peopleStatusEl, error.message, "error");
+      }
+    };
+
+    const savePerson = async () => {
+      const listEntry = currentListEntry();
+      if (!listEntry) {
+        setMessage(peopleMessageEl, "Save/select a church profile first.", "error");
+        return;
+      }
+      setMessage(peopleMessageEl, "Saving person...");
+      try {
+        const payload = {
+          title: document.getElementById("pp-title").value.trim(),
+          role: document.getElementById("pp-role").value.trim() || null,
+          body_text: convertNewlinesToBr(document.getElementById("pp-body-text").value.trim()),
+          from_date: document.getElementById("pp-from-date").value || null,
+          to_date: document.getElementById("pp-to-date").value || null,
+          image_url: document.getElementById("pp-image-url").value.trim() || null,
+          image_storage_path: document.getElementById("pp-image-storage-path").value.trim() || null,
+        };
+        if (!payload.title) throw new Error("Title is required.");
+        if (!payload.body_text) throw new Error("Body text is required.");
+        const personId = Number(document.getElementById("pp-id").value);
+        const existing = Number.isInteger(personId) && personId > 0;
+        const endpoint = existing
+          ? `/api/content/church-profiles/${listEntry}/people/${personId}`
+          : `/api/content/church-profiles/${listEntry}/people`;
+        const method = existing ? "PATCH" : "POST";
+        const data = await fetchJson(endpoint, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        selectedPerson = data?.row ?? null;
+        await loadPeople();
+        setMessage(peopleMessageEl, "Person saved.", "success");
+      } catch (error) {
+        setMessage(peopleMessageEl, error.message, "error");
+      }
+    };
+
+    const deletePerson = async () => {
+      const listEntry = currentListEntry();
+      const personId = Number(document.getElementById("pp-id").value);
+      if (!listEntry || !Number.isInteger(personId) || personId <= 0) {
+        setMessage(peopleMessageEl, "Select a person first.", "error");
+        return;
+      }
+      if (!confirm(`Delete person ${personId}? This cannot be undone.`)) return;
+      try {
+        await fetchJson(`/api/content/church-profiles/${listEntry}/people/${personId}`, {
+          method: "DELETE",
+        });
+        selectedPerson = null;
+        setPeopleForm(null);
+        await loadPeople();
+        setMessage(peopleMessageEl, "Person deleted.", "success");
+      } catch (error) {
+        setMessage(peopleMessageEl, error.message, "error");
+      }
+    };
+
+    const uploadPersonImage = async () => {
+      const listEntry = currentListEntry();
+      const personId = Number(document.getElementById("pp-id").value);
+      if (!listEntry || !Number.isInteger(personId) || personId <= 0) {
+        setMessage(peopleMessageEl, "Save/select a person before uploading an image.", "error");
+        return;
+      }
+      const file = personImageFileEl?.files?.[0];
+      if (!file) {
+        setMessage(peopleMessageEl, "Choose an image file first.", "error");
+        return;
+      }
+      setMessage(peopleMessageEl, "Uploading person image...");
+      try {
+        const base64Data = await fileToBase64(file);
+        const data = await fetchJson(`/api/content/church-profiles/${listEntry}/people-image/${personId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || "image/jpeg",
+            base64Data,
+          }),
+        });
+        selectedPerson = data?.row ?? selectedPerson;
+        await loadPeople();
+        if (personImageFileEl) personImageFileEl.value = "";
+        setMessage(peopleMessageEl, "Person image uploaded.", "success");
+      } catch (error) {
+        setMessage(peopleMessageEl, error.message, "error");
+      }
+    };
+
     const deleteProfile = async () => {
       const listEntry = Number(document.getElementById("p-list-entry").value);
       if (!Number.isInteger(listEntry) || listEntry <= 0) {
@@ -1101,6 +1280,10 @@
     document.getElementById("profile-new-btn").onclick = () => {
       selectedProfile = null;
       setProfileForm(null);
+      selectedPerson = null;
+      setPeopleForm(null);
+      peopleRows = [];
+      renderPeople();
       setMessage(messageEl, "Creating a new profile.");
       updateUrlParams({ listingId: null });
       if (moderationWorkspace) {
@@ -1112,6 +1295,28 @@
     document.getElementById("p-hero-image-upload-btn").onclick = uploadHeroImage;
     document.getElementById("p-plan-image-upload-btn").onclick = uploadPlanImage;
     document.getElementById("p-folklore-create-btn").onclick = createFolklore;
+    document.getElementById("p-people-refresh-btn").onclick = () => {
+      loadPeople().catch(() => {});
+    };
+    document.getElementById("p-people-new-btn").onclick = () => {
+      selectedPerson = null;
+      setPeopleForm(null);
+      setMessage(peopleMessageEl, "Creating a new person entry.");
+    };
+    document.getElementById("pp-save-btn").onclick = savePerson;
+    document.getElementById("pp-delete-btn").onclick = deletePerson;
+    document.getElementById("pp-image-upload-btn").onclick = uploadPersonImage;
+    document.getElementById("pp-image-url").addEventListener("input", () => {
+      const imageUrl = document.getElementById("pp-image-url").value.trim();
+      if (!personImagePreviewEl) return;
+      if (imageUrl) {
+        personImagePreviewEl.src = imageUrl;
+        personImagePreviewEl.style.display = "";
+      } else {
+        personImagePreviewEl.removeAttribute("src");
+        personImagePreviewEl.style.display = "none";
+      }
+    });
     document.getElementById("p-hero-image-url").addEventListener("input", () => {
       updateHeroPreview(
         document.getElementById("p-hero-image-url").value,
@@ -1462,6 +1667,156 @@
     document.getElementById("cod-delete-btn").onclick = deleteEntry;
   }
 
+  function toDateTimeLocalValue(value) {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const offsetMs = parsed.getTimezoneOffset() * 60000;
+    return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
+  }
+
+  function fromDateTimeLocalValue(value) {
+    const cleaned = String(value || "").trim();
+    if (!cleaned) return null;
+    const parsed = new Date(cleaned);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  }
+
+  async function initAnnouncementsPage() {
+    const listEl = document.getElementById("announcement-list");
+    if (!listEl) return;
+
+    let selectedRow = null;
+    let rows = [];
+    const statusEl = document.getElementById("announcement-status");
+    const messageEl = document.getElementById("announcement-message");
+    const idEl = document.getElementById("a-id");
+    const messageFieldEl = document.getElementById("a-message");
+    const validFromEl = document.getElementById("a-valid-from");
+    const validToEl = document.getElementById("a-valid-to");
+    const isActiveEl = document.getElementById("a-is-active");
+
+    const setForm = (row) => {
+      selectedRow = row || null;
+      idEl.value = row?.id ?? "";
+      messageFieldEl.value = row?.message ?? "";
+      validFromEl.value = toDateTimeLocalValue(row?.valid_from);
+      validToEl.value = toDateTimeLocalValue(row?.valid_to);
+      isActiveEl.checked = row?.is_active !== false;
+    };
+
+    const renderRows = () => {
+      listEl.innerHTML = "";
+      if (!rows.length) {
+        listEl.innerHTML = "<div class='list-item mini'>No announcements found.</div>";
+        return;
+      }
+      rows.forEach((row) => {
+        const item = document.createElement("div");
+        item.className = `list-item ${selectedRow?.id === row.id ? "active" : ""}`;
+        item.innerHTML = `
+          <h4>${htmlEscape(row.id)}</h4>
+          <div class="mini">${htmlEscape(row.is_active ? "active" : "inactive")} | from ${htmlEscape(row.valid_from || "")}</div>
+          <div class="mini">${htmlEscape(String(row.message || "").slice(0, 140))}</div>
+        `;
+        item.onclick = async () => {
+          try {
+            const data = await fetchJson(`/api/content/site-announcements/${encodeURIComponent(row.id)}`);
+            setForm(data.row || row);
+            renderRows();
+          } catch (error) {
+            setMessage(messageEl, error.message, "error");
+          }
+        };
+        listEl.appendChild(item);
+      });
+    };
+
+    const loadRows = async () => {
+      setMessage(statusEl, "Loading announcements...");
+      try {
+        const data = await fetchJson("/api/content/site-announcements?limit=500");
+        rows = Array.isArray(data?.rows) ? data.rows : [];
+        renderRows();
+        setMessage(statusEl, `${rows.length} announcements loaded`, "success");
+      } catch (error) {
+        setMessage(statusEl, error.message, "error");
+      }
+    };
+
+    const collectPayload = () => {
+      const payload = {
+        id: idEl.value.trim(),
+        message: messageFieldEl.value.trim(),
+        valid_from: fromDateTimeLocalValue(validFromEl.value),
+        valid_to: fromDateTimeLocalValue(validToEl.value),
+        is_active: Boolean(isActiveEl.checked),
+      };
+      if (!payload.valid_to) payload.valid_to = null;
+      return payload;
+    };
+
+    const saveRow = async () => {
+      setMessage(messageEl, "Saving...");
+      try {
+        const payload = collectPayload();
+        if (!payload.id) throw new Error("ID is required.");
+        if (!payload.message) throw new Error("Message is required.");
+        if (!payload.valid_from) throw new Error("Valid From is required.");
+        if (payload.valid_to && new Date(payload.valid_to).getTime() < new Date(payload.valid_from).getTime()) {
+          throw new Error("Valid To must be after Valid From.");
+        }
+
+        if (selectedRow?.id && selectedRow.id === payload.id) {
+          await fetchJson(`/api/content/site-announcements/${encodeURIComponent(payload.id)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await fetchJson("/api/content/site-announcements", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        }
+        await loadRows();
+        selectedRow = { id: payload.id };
+        setMessage(messageEl, "Announcement saved.", "success");
+      } catch (error) {
+        setMessage(messageEl, error.message, "error");
+      }
+    };
+
+    const deleteRow = async () => {
+      const id = idEl.value.trim();
+      if (!id) {
+        setMessage(messageEl, "Enter or select an announcement first.", "error");
+        return;
+      }
+      if (!confirm(`Delete announcement '${id}'? This cannot be undone.`)) return;
+      try {
+        await fetchJson(`/api/content/site-announcements/${encodeURIComponent(id)}`, { method: "DELETE" });
+        setForm(null);
+        await loadRows();
+        setMessage(messageEl, "Announcement deleted.", "success");
+      } catch (error) {
+        setMessage(messageEl, error.message, "error");
+      }
+    };
+
+    document.getElementById("announcement-refresh-btn").onclick = loadRows;
+    document.getElementById("announcement-new-btn").onclick = () => {
+      setForm(null);
+      setMessage(messageEl, "Creating a new announcement.");
+    };
+    document.getElementById("announcement-save-btn").onclick = saveRow;
+    document.getElementById("announcement-delete-btn").onclick = deleteRow;
+
+    await loadRows();
+  }
+
   async function initModerationPage() {
     const listEl = document.getElementById("moderation-list");
     if (!listEl) return;
@@ -1681,6 +2036,7 @@
       initProfilesPage().catch(() => {});
       initHistoryFactsPage().catch(() => {});
       initChurchOfDayPage().catch(() => {});
+      initAnnouncementsPage().catch(() => {});
       initModerationPage().catch(() => {});
     })
     .catch(() => {});

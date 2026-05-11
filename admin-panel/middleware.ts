@@ -37,5 +37,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/church-profiles", "/moderation", "/history-facts", "/church-of-day", "/login"],
+  matcher: ["/", "/church-profiles", "/moderation", "/history-facts", "/church-of-day", "/announcements", "/login"],
 };

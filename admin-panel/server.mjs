@@ -332,6 +332,67 @@ function parseMonthDay(value, label, min, max) {
   return numberValue;
 }
 
+function parseIsoTimestamp(value, label, { required = false } = {}) {
+  const cleaned = cleanString(value);
+  if (!cleaned) {
+    if (required) throw new Error(`${label} is required.`);
+    return null;
+  }
+  const parsed = new Date(cleaned);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${label} must be a valid datetime.`);
+  }
+  return parsed.toISOString();
+}
+
+function parseBooleanOrDefault(value, defaultValue = false) {
+  if (typeof value === "boolean") return value;
+  if (value === null || value === undefined || value === "") return defaultValue;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return Boolean(value);
+}
+
+function buildAnnouncementPayload(parsed, isCreate) {
+  const id = cleanString(parsed.id);
+  const message = cleanString(parsed.message);
+  const validFrom = parseIsoTimestamp(parsed.valid_from, "valid_from", { required: isCreate });
+  const validTo = parseIsoTimestamp(parsed.valid_to, "valid_to");
+  const isActive = parseBooleanOrDefault(parsed.is_active, true);
+
+  const payload = {
+    id: id ?? undefined,
+    message: message ?? undefined,
+    valid_from: validFrom ?? undefined,
+    valid_to: validTo,
+    is_active: isActive,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (isCreate) {
+    if (!id) throw new Error("id is required.");
+    if (!message) throw new Error("message is required.");
+    payload.created_at = new Date().toISOString();
+  } else {
+    if (!id) delete payload.id;
+    if (!message) delete payload.message;
+    if (!validFrom) delete payload.valid_from;
+    if (parsed.valid_to === undefined) delete payload.valid_to;
+    if (parsed.is_active === undefined) delete payload.is_active;
+  }
+
+  const startIso = payload.valid_from ?? validFrom;
+  const endIso = payload.valid_to ?? validTo;
+  if (startIso && endIso && new Date(endIso).getTime() < new Date(startIso).getTime()) {
+    throw new Error("valid_to must be greater than or equal to valid_from.");
+  }
+
+  return payload;
+}
+
 function decodeHtmlEntities(value) {
   return String(value || "")
     .replace(/&amp;/g, "&")
@@ -1827,7 +1888,7 @@ export async function handleRequest(req, res) {
     const segments = pathname.split("/").filter(Boolean);
     const validPrefix =
       segments.length >= 4 &&
-      segments.length <= 5 &&
+      segments.length <= 6 &&
       segments[0] === "api" &&
       segments[1] === "content" &&
       segments[2] === "church-profiles";
@@ -1837,8 +1898,163 @@ export async function handleRequest(req, res) {
     }
     const parsedListEntry = Number(segments[3]);
     const action = segments[4] ?? null;
+    const actionId = segments[5] ?? null;
     if (!Number.isInteger(parsedListEntry) || parsedListEntry <= 0) {
       sendJson(res, 400, { error: "Invalid list entry." });
+      return;
+    }
+
+    if (action === "people") {
+      if (method === "GET" && !actionId) {
+        try {
+          const rows = await supabaseRequest(
+            `church_people?list_entry=eq.${parsedListEntry}&select=id,user_id,list_entry,title,role,body_text,image_url,image_storage_path,from_date,to_date,status,admin_notes,created_at,updated_at&order=created_at.desc&limit=300`
+          );
+          sendJson(res, 200, { rows: Array.isArray(rows) ? rows : [] });
+        } catch (error) {
+          sendJson(res, 500, { error: String(error.message || error) });
+        }
+        return;
+      }
+
+      if (method === "POST" && !actionId) {
+        try {
+          const parsed = await parseJsonBody(req);
+          const title = cleanString(parsed.title);
+          const bodyText = cleanString(parsed.body_text);
+          if (!title) {
+            sendJson(res, 400, { error: "title is required." });
+            return;
+          }
+          if (!bodyText) {
+            sendJson(res, 400, { error: "body_text is required." });
+            return;
+          }
+          const payload = {
+            user_id: cleanString(parsed.user_id) ?? authContext.user.id,
+            list_entry: parsedListEntry,
+            title,
+            role: cleanString(parsed.role),
+            body_text: bodyText,
+            image_url: cleanString(parsed.image_url),
+            image_storage_path: cleanString(parsed.image_storage_path),
+            from_date: parseDate(parsed.from_date),
+            to_date: parseDate(parsed.to_date),
+            status: cleanString(parsed.status) ?? "approved",
+            admin_notes: cleanString(parsed.admin_notes),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          const rows = await supabaseRequest("church_people", {
+            method: "POST",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify(payload),
+          });
+          sendJson(res, 200, { row: rows?.[0] ?? null });
+        } catch (error) {
+          sendJson(res, 400, { error: String(error.message || error) });
+        }
+        return;
+      }
+
+      const personId = Number(actionId);
+      if (!Number.isInteger(personId) || personId <= 0) {
+        sendJson(res, 400, { error: "Invalid person id." });
+        return;
+      }
+
+      if (method === "GET") {
+        try {
+          const rows = await supabaseRequest(
+            `church_people?id=eq.${personId}&list_entry=eq.${parsedListEntry}&select=id,user_id,list_entry,title,role,body_text,image_url,image_storage_path,from_date,to_date,status,admin_notes,created_at,updated_at&limit=1`
+          );
+          sendJson(res, 200, { row: rows?.[0] ?? null });
+        } catch (error) {
+          sendJson(res, 500, { error: String(error.message || error) });
+        }
+        return;
+      }
+
+      if (method === "PATCH") {
+        try {
+          const parsed = await parseJsonBody(req);
+          const payload = {
+            title: "title" in parsed ? cleanString(parsed.title) : undefined,
+            role: "role" in parsed ? cleanString(parsed.role) : undefined,
+            body_text: "body_text" in parsed ? cleanString(parsed.body_text) : undefined,
+            image_url: "image_url" in parsed ? cleanString(parsed.image_url) : undefined,
+            image_storage_path: "image_storage_path" in parsed ? cleanString(parsed.image_storage_path) : undefined,
+            from_date: "from_date" in parsed ? parseDate(parsed.from_date) : undefined,
+            to_date: "to_date" in parsed ? parseDate(parsed.to_date) : undefined,
+            status: "status" in parsed ? cleanString(parsed.status) : undefined,
+            admin_notes: "admin_notes" in parsed ? cleanString(parsed.admin_notes) : undefined,
+            updated_at: new Date().toISOString(),
+          };
+          Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
+          const rows = await supabaseRequest(
+            `church_people?id=eq.${personId}&list_entry=eq.${parsedListEntry}`,
+            {
+              method: "PATCH",
+              headers: { Prefer: "return=representation" },
+              body: JSON.stringify(payload),
+            }
+          );
+          sendJson(res, 200, { row: rows?.[0] ?? null });
+        } catch (error) {
+          sendJson(res, 400, { error: String(error.message || error) });
+        }
+        return;
+      }
+
+      if (method === "DELETE") {
+        try {
+          await supabaseRequest(`church_people?id=eq.${personId}&list_entry=eq.${parsedListEntry}`, {
+            method: "DELETE",
+            headers: { Prefer: "return=minimal" },
+          });
+          sendJson(res, 200, { ok: true });
+        } catch (error) {
+          sendJson(res, 500, { error: String(error.message || error) });
+        }
+        return;
+      }
+
+      if (method === "POST" && actionId === "upload-image") {
+        sendJson(res, 405, { error: "Use /people/:personId/upload-image endpoint." });
+        return;
+      }
+    }
+
+    if (action === "people-image" && method === "POST" && actionId) {
+      const personId = Number(actionId);
+      if (!Number.isInteger(personId) || personId <= 0) {
+        sendJson(res, 400, { error: "Invalid person id." });
+        return;
+      }
+      try {
+        const parsed = await parseJsonBody(req);
+        const { publicUrl, objectPath } = await uploadImageToStorage({
+          listEntry: parsedListEntry,
+          fileName: parsed.fileName,
+          mimeType: parsed.mimeType,
+          base64Data: parsed.base64Data,
+        });
+        const rows = await supabaseRequest(
+          `church_people?id=eq.${personId}&list_entry=eq.${parsedListEntry}`,
+          {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({
+              image_url: publicUrl,
+              image_storage_path: objectPath,
+              updated_at: new Date().toISOString(),
+            }),
+          }
+        );
+        sendJson(res, 200, { row: rows?.[0] ?? null, publicUrl, objectPath });
+      } catch (error) {
+        sendJson(res, 400, { error: String(error.message || error) });
+      }
       return;
     }
 
@@ -2245,6 +2461,104 @@ export async function handleRequest(req, res) {
       sendJson(res, 200, { rows: enrichedRows, limit, offset });
     } catch (error) {
       sendJson(res, 500, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname === "/api/content/site-announcements" && method === "GET") {
+    if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
+    const limit = Math.max(1, Math.min(500, Number(requestUrl.searchParams.get("limit") || 200)));
+    const offset = Math.max(0, Number(requestUrl.searchParams.get("offset") || 0));
+    try {
+      const rows = await supabaseRequest(
+        `site_announcements?select=id,message,valid_from,valid_to,is_active,created_at,updated_at&order=valid_from.desc,created_at.desc&limit=${limit}&offset=${offset}`
+      );
+      sendJson(res, 200, { rows, limit, offset });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname === "/api/content/site-announcements" && method === "POST") {
+    if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
+    try {
+      const parsed = await parseJsonBody(req);
+      const payload = buildAnnouncementPayload(parsed, true);
+      const rows = await supabaseRequest("site_announcements", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      sendJson(res, 200, { row: rows?.[0] ?? null });
+    } catch (error) {
+      sendJson(res, 400, { error: String(error.message || error) });
+    }
+    return;
+  }
+
+  if (pathname.startsWith("/api/content/site-announcements/")) {
+    if (!requireSupabaseConfig(res)) return;
+    const authContext = await resolveAdminAuthContext(req);
+    if (!authContext) {
+      return sendJson(res, 401, { error: "Unauthorized" });
+    }
+    const announcementId = cleanString(
+      decodeURIComponent(pathname.replace("/api/content/site-announcements/", ""))
+    );
+    if (!announcementId) {
+      sendJson(res, 400, { error: "Invalid announcement id." });
+      return;
+    }
+    const encodedId = encodeURIComponent(announcementId);
+
+    if (method === "GET") {
+      try {
+        const rows = await supabaseRequest(
+          `site_announcements?id=eq.${encodedId}&select=id,message,valid_from,valid_to,is_active,created_at,updated_at&limit=1`
+        );
+        sendJson(res, 200, { row: rows?.[0] ?? null });
+      } catch (error) {
+        sendJson(res, 500, { error: String(error.message || error) });
+      }
+      return;
+    }
+
+    if (method === "PATCH") {
+      try {
+        const parsed = await parseJsonBody(req);
+        const payload = buildAnnouncementPayload(parsed, false);
+        const rows = await supabaseRequest(`site_announcements?id=eq.${encodedId}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(payload),
+        });
+        sendJson(res, 200, { row: rows?.[0] ?? null });
+      } catch (error) {
+        sendJson(res, 400, { error: String(error.message || error) });
+      }
+      return;
+    }
+
+    if (method === "DELETE") {
+      try {
+        await supabaseRequest(`site_announcements?id=eq.${encodedId}`, {
+          method: "DELETE",
+          headers: { Prefer: "return=minimal" },
+        });
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 500, { error: String(error.message || error) });
+      }
+      return;
     }
     return;
   }

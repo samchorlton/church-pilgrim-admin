@@ -21,6 +21,7 @@ export default function ModerationPage() {
           <a className="nav-link active" href="/moderation">Moderation</a>
           <a className="nav-link" href="/history-facts">History Facts</a>
           <a className="nav-link" href="/church-of-day">Church of the Day</a>
+          <a className="nav-link" href="/announcements">Announcements</a>
         </nav>
 
         <section className="panel">
