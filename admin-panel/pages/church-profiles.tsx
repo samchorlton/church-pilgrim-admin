@@ -77,6 +77,7 @@ export default function ChurchProfilesPage() {
                     <option value="Derelict">Derelict</option>
                     <option value="Preserved Historic Site">Preserved Historic Site</option>
                     <option value="Closed Church">Closed Church</option>
+                    <option value="Church in Abeyance">Church in Abeyance</option>
                     <option value="Demolished">Demolished</option>
                     <option value="Current Use Unknown">Current Use Unknown</option>
                   </select>
