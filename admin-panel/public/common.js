@@ -94,8 +94,14 @@
 
   function sanitizeRichHtml(value) {
     return String(value ?? "")
+      .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/<!--\s*StartFragment\s*-->/gi, "")
       .replace(/<!--\s*EndFragment\s*-->/gi, "")
+      .replace(/<span[^>]*class=["']Apple-converted-space["'][^>]*>(?:&nbsp;|\s)*<\/span>/gi, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/<\/?span\b[^>]*>/gi, "")
+      .replace(/\sclass=(["']).*?\1/gi, "")
+      .replace(/\sstyle=(["']).*?\1/gi, "")
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
       .replace(/\son\w+="[^"]*"/gi, "")
@@ -104,11 +110,12 @@
   }
 
   function normalizeHtmlForStorage(value) {
-    return String(value ?? "")
+    return sanitizeRichHtml(String(value ?? ""))
       .replace(/<\s*div\b[^>]*>/gi, "")
       .replace(/<\s*\/div\s*>/gi, "<br>")
       .replace(/<\s*p\b[^>]*>/gi, "")
       .replace(/<\s*\/p\s*>/gi, "<br><br>")
+      .replace(/[ \t]+/g, " ")
       .replace(/(<br>\s*){3,}/gi, "<br><br>")
       .trim();
   }

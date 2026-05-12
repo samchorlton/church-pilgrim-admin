@@ -226,6 +226,20 @@ function cleanString(value) {
   return normalized.length ? normalized : null;
 }
 
+function cleanRichText(value) {
+  const cleaned = cleanString(value);
+  if (!cleaned) return null;
+  return cleaned
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<span[^>]*class=["']Apple-converted-space["'][^>]*>(?:&nbsp;|\s)*<\/span>/gi, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/<\/?span\b[^>]*>/gi, "")
+    .replace(/\sclass=(["']).*?\1/gi, "")
+    .replace(/\sstyle=(["']).*?\1/gi, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
 function parseTags(value) {
   if (Array.isArray(value)) {
     return Array.from(
@@ -1012,10 +1026,10 @@ function buildChurchProfilePayload(input, forCreate) {
     list_entry: listEntry,
     title: title ?? undefined,
     subtitle: cleanString(input.subtitle),
-    summary: cleanString(input.summary),
+    summary: cleanRichText(input.summary),
     current_usage: cleanString(input.current_usage),
     editorial_status: validateEditorialStatus(input.editorial_status), // Validate enum values
-    editorial_notes: cleanString(input.editorial_notes),
+    editorial_notes: cleanRichText(input.editorial_notes),
     church_website: cleanString(input.church_website),
     tags: parseTags(input.tags),
     timeline_events: parseJsonOrNull(input.timeline_events, "timeline_events"),
@@ -1035,12 +1049,12 @@ function buildChurchProfilePayload(input, forCreate) {
     
     // Map content blocks from profile_json.contentBlocks to explicit columns
     // Note: overview_detail column doesn't exist in schema - overview content is not stored
-    history_detail: cleanString(profileJson.contentBlocks?.history),
-    architecture_detail: cleanString(profileJson.contentBlocks?.architecture),
+    history_detail: cleanRichText(profileJson.contentBlocks?.history),
+    architecture_detail: cleanRichText(profileJson.contentBlocks?.architecture),
     plan_url: cleanString(input.plan_url ?? profileJson.contentBlocks?.planUrl),
     
     // Map supplementary info from profile_json.supplementary to explicit columns
-    additional_info: cleanString(profileJson.supplementary?.sourceSummary),
+    additional_info: cleanRichText(profileJson.supplementary?.sourceSummary),
     // Note: source_history, source_details, reasons_for_designation don't exist in actual schema
     date_first_listed: parseDate(profileJson.supplementary?.listedDate), // date type in schema
     grade: cleanString(profileJson.supplementary?.grade),
